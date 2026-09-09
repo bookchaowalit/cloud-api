@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solo-empire.local/contracts/cloud.v1.json",
+  "title": "Solo Empire Cloud API v1 envelope",
+  "description": "Common envelope for sanitized Cloud/PaaS projections. Route-specific adapter fields remain governed by their own schema_version values.",
+  "type": "object",
+  "required": ["contract", "route"],
+  "properties": {
+    "contract": { "const": "solo-empire.cloud-api.v1" },
+    "route": {
+      "enum": ["cloud_usage", "paas_inventory", "paas_actions", "render_discovery", "render_preflight", "paas_command"]
+    },
+    "schema_version": { "type": "string", "minLength": 1 },
+    "mode": { "type": "string" },
+    "read_only": { "type": "boolean" },
+    "execution_enabled": { "type": "boolean" },
+    "write_attempted": { "type": "boolean" },
+    "checked_at": { "type": ["string", "null"], "format": "date-time" },
+    "providers": { "type": "array", "maxItems": 20, "items": { "type": "object" } },
+    "summary": { "type": "object" },
+    "error": { "type": "object" }
+  },
+  "additionalProperties": true,
+  "x-transport": {
+    "default_host": "127.0.0.1",
+    "default_port": 3440,
+    "health": "GET /health",
+    "read_routes": [
+      "GET /api/v1/cloud/usage?live=false|true",
+      "GET /api/v1/paas/inventory?live=false|true",
+      "GET /api/v1/paas/actions",
+      "GET /api/v1/paas/render/discovery",
+      "GET /api/v1/paas/render/action-preflight"
+    ],
+    "command_route": "POST /api/v1/paas/commands",
+    "max_command_body_bytes": 16384,
+    "command_boundary": "loopback peer + allowed local Origin + X-Solo-PaaS-Command: 1 + application/json + optional bearer token",
+    "approval_authority": "infra/scripts/platform/paas_execute.py",
+    "legacy_facade": "infra/dashboard remains available during the extraction pilot"
+  }
+}
