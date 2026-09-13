@@ -159,7 +159,7 @@ class CloudApi:
         self.environment = (environment or os.environ.get("CLOUD_API_ENV", "development")).strip().lower()
         configured_origins = os.environ.get(
             "CLOUD_API_CORS_ORIGINS",
-            "http://localhost:3200,http://127.0.0.1:3200",
+            "http://localhost:3400,http://127.0.0.1:3400",
         )
         self.allowed_origins = allowed_origins or tuple(
             value.strip() for value in configured_origins.split(",") if value.strip()
