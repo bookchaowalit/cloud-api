@@ -1,0 +1,644 @@
+schema_version: solo-empire.cloud-providers.v1
+version: 1
+purpose: Read-only source of truth for cloud and SaaS providers used or evaluated by Solo Empire.
+read_only_by_default: true
+deployment_enabled: false
+write_actions_enabled: false
+write_entrypoint: paas:action:propose
+write_actions_reason: Provider mutations are not enabled directly; any future write must go through the reviewed PaaS proposal workflow.
+
+providers:
+  - id: cloudflare
+    name: Cloudflare
+    icon: "☁"
+    category: edge-storage
+    dashboard_url: https://dash.cloudflare.com
+    api_docs: https://developers.cloudflare.com/api/
+    cli_binary: wrangler
+    cli_version_command: [wrangler, --version]
+    cli_install:
+      command: npm install --global wrangler
+      url: https://developers.cloudflare.com/workers/wrangler/install-and-update/
+    auth:
+      env: [CLOUDFLARE_API_TOKEN]
+      secret_manager:
+        path: /cloudflare
+        names: [CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID]
+      cli_session:
+        check_command: [wrangler, whoami]
+        token_command: null
+    optional_env: [CLOUDFLARE_ACCOUNT_ID]
+    capabilities:
+      health: true
+      inventory: true
+      usage: true
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [r2-data-lake-storage]
+        status: integrated
+        evidence:
+          - infra/scripts/platform/cloudflare_r2_usage.py
+          - systems/cloud-platform/cloud-generalist-stack.md
+      - project: solo-empire
+        uses: [workers, pages]
+        status: documented
+        evidence:
+          - docs/ARCHITECTURE.md
+          - systems/cloud-platform/cloud-generalist-stack.md
+        note: Runtime use is documented, but a live deployment was not verified by this registry change.
+
+  - id: github
+    name: GitHub
+    icon: "🐙"
+    category: source-control-ci
+    dashboard_url: https://github.com/settings/billing
+    api_docs: https://docs.github.com/rest
+    cli_binary: gh
+    cli_version_command: [gh, --version]
+    cli_install:
+      url: https://cli.github.com/
+    auth:
+      env: [GITHUB_PERSONAL_ACCESS_TOKEN, GITHUB_TOKEN]
+      secret_manager:
+        path: /github
+        names: [GITHUB_PERSONAL_ACCESS_TOKEN, GITHUB_TOKEN]
+      cli_session:
+        check_command: [gh, auth, status]
+        token_command: [gh, auth, token]
+    optional_env: [GITHUB_BILLING_OWNER, GITHUB_BILLING_OWNER_TYPE, GITHUB_ACTIONS_PLAN]
+    capabilities:
+      health: true
+      inventory: false
+      usage: true
+      billing: true
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [source-control, ci-cd, actions-billing]
+        status: integrated
+        evidence:
+          - infra/scripts/platform/github_actions_usage.py
+          - infra/platform/README.md
+
+  - id: vercel
+    name: Vercel
+    icon: "▲"
+    category: hosting
+    dashboard_url: https://vercel.com/dashboard
+    api_docs: https://vercel.com/docs/rest-api
+    cli_binary: vercel
+    cli_version_command: [vercel, --version]
+    cli_install:
+      command: npm install --global vercel
+      url: https://vercel.com/docs/cli
+    auth:
+      env: [VERCEL_TOKEN]
+      secret_manager:
+        path: /vercel
+        names: [VERCEL_TOKEN, VERCEL_TEAM_ID]
+      cli_session:
+        check_command: [vercel, whoami]
+        token_command: null
+    optional_env: [VERCEL_TEAM_ID, VERCEL_TEAM_SLUG]
+    capabilities:
+      health: true
+      inventory: true
+      usage: true
+      billing: true
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: true
+    health_check: vercel
+    read_capabilities: [api-health, project-summary, billing-summary, dashboard-link]
+    write_capabilities: []
+    project_usage:
+      - project: solo-empire
+        uses: [health, inventory, billing]
+        status: integrated
+        evidence:
+          - infra/scripts/platform/paas_health.py
+          - infra/scripts/platform/paas_inventory.py
+          - infra/scripts/platform/vercel_billing.py
+      - project: solo-empire
+        uses: [hosting]
+        status: documented
+        evidence:
+          - docs/ARCHITECTURE.md
+          - systems/cloud-platform/cloud-generalist-stack.md
+        note: The architecture mentions Vercel, while the cloud stack calls it an optional comparison lane; live deployment is unverified.
+
+  - id: render
+    name: Render
+    icon: "◈"
+    category: hosting
+    dashboard_url: https://dashboard.render.com
+    api_docs: https://render.com/docs/api
+    cli_binary: render
+    cli_version_command: [render, --version]
+    cli_install:
+      url: https://render.com/docs/cli
+    auth:
+      env: [RENDER_API_KEY]
+      secret_manager:
+        path: /render
+        names: [RENDER_API_KEY]
+      cli_session: null
+    optional_env: []
+    capabilities:
+      health: true
+      inventory: true
+      usage: false
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: true
+    health_check: render
+    read_capabilities: [api-health, service-summary, dashboard-link]
+    write_capabilities: []
+    project_usage:
+      - project: book-job-data
+        uses: [hosted-api-compatibility-mirror]
+        status: documented
+        evidence:
+          - repository-catalog/registries/projects.yaml
+          - systems/cloud-platform/cloud-generalist-stack.md
+      - project: solo-empire
+        uses: [health, inventory]
+        status: integrated
+        evidence:
+          - infra/scripts/platform/paas_health.py
+          - infra/scripts/platform/paas_inventory.py
+
+  - id: railway
+    name: Railway
+    icon: "🚂"
+    category: hosting
+    dashboard_url: https://railway.app/dashboard
+    api_docs: https://docs.railway.com/integrations/api
+    cli_binary: railway
+    cli_version_command: [railway, --version]
+    cli_install:
+      command: npm install --global @railway/cli
+      url: https://docs.railway.com/guides/cli
+    auth:
+      env: [RAILWAY_TOKEN, RAILWAY_API_TOKEN]
+      secret_manager:
+        path: /railway
+        names: [RAILWAY_TOKEN, RAILWAY_API_TOKEN]
+      cli_session:
+        check_command: [railway, whoami]
+        token_command: null
+    optional_env: [RAILWAY_WORKSPACE_ID]
+    capabilities:
+      health: true
+      inventory: true
+      usage: false
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: true
+    health_check: railway
+    read_capabilities: [api-health, workspace-summary, dashboard-link]
+    write_capabilities: []
+    project_usage:
+      - project: solo-empire
+        uses: [health, inventory]
+        status: adapter_only
+        evidence:
+          - infra/scripts/platform/paas_health.py
+          - infra/scripts/platform/paas_inventory.py
+        note: The repository has read-only adapters, but no deployed project using Railway is recorded.
+
+  - id: fly-io
+    name: Fly.io
+    icon: "✈"
+    category: hosting
+    dashboard_url: https://fly.io/dashboard
+    api_docs: https://fly.io/docs/machines/api/
+    cli_binary: flyctl
+    cli_version_command: [flyctl, version]
+    cli_install:
+      url: https://fly.io/docs/flyctl/install/
+    auth:
+      env: [FLY_API_TOKEN, FLY_TOKEN]
+      secret_manager:
+        path: /fly-io
+        names: [FLY_API_TOKEN, FLY_TOKEN]
+      cli_session:
+        check_command: [flyctl, auth, whoami]
+        token_command: null
+    optional_env: [FLY_ORG_SLUG]
+    capabilities:
+      health: true
+      inventory: true
+      usage: false
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: true
+    health_check: fly-io
+    read_capabilities: [api-health, app-summary, dashboard-link]
+    write_capabilities: []
+    project_usage:
+      - project: solo-empire
+        uses: [health, inventory]
+        status: adapter_only
+        evidence:
+          - infra/scripts/platform/paas_health.py
+          - infra/scripts/platform/paas_inventory.py
+        note: The repository has read-only adapters, but no deployed project using Fly.io is recorded.
+
+  - id: heroku
+    name: Heroku
+    icon: "⬡"
+    category: hosting
+    dashboard_url: https://dashboard.heroku.com
+    api_docs: https://devcenter.heroku.com/articles/platform-api-reference
+    cli_binary: heroku
+    cli_version_command: [heroku, --version]
+    cli_version_timeout_seconds: 40
+    cli_install:
+      url: https://devcenter.heroku.com/articles/heroku-cli
+    auth:
+      env: [HEROKU_TOKEN, HEROKU_API_KEY]
+      secret_manager:
+        path: /heroku
+        names: [HEROKU_TOKEN, HEROKU_API_KEY]
+      cli_session:
+        check_command: [heroku, auth:whoami]
+        token_command: null
+    optional_env: []
+    capabilities:
+      health: true
+      inventory: true
+      usage: false
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: true
+    health_check: heroku
+    read_capabilities: [api-health, account-summary, dashboard-link]
+    write_capabilities: []
+    project_usage:
+      - project: solo-empire
+        uses: [health, inventory]
+        status: adapter_only
+        evidence:
+          - infra/scripts/platform/paas_health.py
+          - infra/scripts/platform/paas_inventory.py
+        note: The repository has read-only adapters, but no deployed project using Heroku is recorded.
+
+  - id: neon
+    name: Neon
+    icon: "◉"
+    category: database
+    dashboard_url: https://console.neon.tech
+    api_docs: https://api-docs.neon.tech/reference
+    cli_binary: neonctl
+    cli_version_command: [neonctl, --version]
+    cli_install:
+      command: npm install --global neonctl
+      url: https://neon.tech/docs/reference/neon-cli
+    auth:
+      env: [NEON_API_KEY]
+      secret_manager:
+        path: /neon
+        names: [NEON_API_KEY, NEON_ORG_ID]
+      cli_session: null
+    optional_env: [NEON_ORG_ID, TRADING_DATABASE_URL, NEON_DATA_LAKE_CATALOG_URL]
+    capabilities:
+      health: true
+      inventory: true
+      usage: true
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: booktrading
+        uses: [postgres-database]
+        status: documented
+        evidence:
+          - infra/.env.example
+          - infra/scripts/workflows/daily-dashboard.py
+          - mcp/MCP-REFERENCE.md
+        note: The database connection is documented as Neon; live connectivity was not checked.
+      - project: solo-empire
+        uses: [optional-data-lake-catalog]
+        status: planned
+        evidence:
+          - infra/.env.example
+          - systems/cloud-platform/cloud-generalist-stack.md
+
+  - id: runpod
+    name: RunPod
+    icon: "◈"
+    category: gpu-compute
+    dashboard_url: https://www.runpod.io/console
+    api_docs: https://docs.runpod.io/api-reference
+    cli_binary: runpodctl
+    cli_version_command: [runpodctl, version]
+    cli_install:
+      url: https://docs.runpod.io/runpodctl/overview
+    auth:
+      env: [RUNPOD_API_KEY]
+      secret_manager:
+        path: /runpod
+        names: [RUNPOD_API_KEY]
+      cli_session: null
+    optional_env: [RUNPOD_AUTO_STOP_ENABLED, RUNPOD_POD_ID]
+    capabilities:
+      health: true
+      inventory: true
+      usage: true
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [gpu-budget-and-queue-control]
+        status: control_only
+        evidence:
+          - infra/scripts/platform/gpu_worker_policy.py
+          - infra/scripts/platform/llm_lab_budget.py
+        note: Local controls do not start Pods; the separate read adapter lists desired states and credit rates, not billed spend.
+
+  - id: supabase
+    name: Supabase
+    icon: "◍"
+    category: database
+    dashboard_url: https://supabase.com/dashboard
+    api_docs: https://supabase.com/docs/reference/api
+    cli_binary: supabase
+    cli_version_command: [supabase, --version]
+    cli_install:
+      url: https://supabase.com/docs/guides/cli/getting-started
+    auth:
+      env: [SUPABASE_ACCESS_TOKEN]
+      secret_manager:
+        path: /supabase
+        names: [SUPABASE_ACCESS_TOKEN]
+      cli_session: null
+    optional_env: [SUPABASE_URL]
+    capabilities:
+      health: true
+      inventory: true
+      usage: false
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [optional-baas-comparison]
+        status: planned
+        evidence:
+          - systems/cloud-platform/cloud-generalist-stack.md
+          - infra/.env.example
+        note: A documented access token does not establish an active project deployment.
+
+  - id: upstash
+    name: Upstash
+    icon: "↗"
+    category: cache
+    dashboard_url: https://console.upstash.com
+    api_docs: https://upstash.com/docs/devops/developer-api/overview
+    cli_binary: upstash
+    cli_version_command: [upstash, --version]
+    cli_install:
+      command: npm install --global @upstash/cli
+      url: https://upstash.com/docs/agent-resources/cli
+    auth:
+      env: [UPSTASH_API_KEY]
+      secret_manager:
+        path: /upstash
+        names: [UPSTASH_API_KEY, UPSTASH_EMAIL, UPSTASH_REDIS_REST_TOKEN]
+      cli_session: null
+    optional_env: [UPSTASH_EMAIL, UPSTASH_REDIS_REST_URL]
+    capabilities:
+      health: true
+      inventory: true
+      usage: true
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [optional-cache-rate-limit-queue]
+        status: planned
+        evidence:
+          - systems/cloud-platform/cloud-generalist-stack.md
+          - infra/scripts/data_lake/hosted_integrations.py
+
+  - id: infisical
+    name: Infisical
+    icon: "🔐"
+    category: secrets
+    dashboard_url: https://app.infisical.com
+    api_docs: https://infisical.com/docs/api-reference
+    cli_binary: infisical
+    cli_version_command: [infisical, --version]
+    cli_install:
+      url: https://infisical.com/docs/cli/overview
+    auth:
+      env: [INFISICAL_UNIVERSAL_AUTH_CLIENT_ID, INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET]
+      secret_manager: null
+      cli_session:
+        check_command: [infisical, whoami]
+        token_command: null
+    optional_env: [INFISICAL_CLI_ENABLED, INFISICAL_PROJECT_ID, INFISICAL_ENVIRONMENT]
+    capabilities:
+      health: true
+      inventory: false
+      usage: false
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [secret-resolution]
+        status: integrated
+        evidence:
+          - infra/scripts/utils/secret_resolver.py
+          - systems/cloud-platform/secret-management.md
+
+  - id: sentry
+    name: Sentry
+    icon: "◉"
+    category: observability
+    dashboard_url: https://sentry.io/organizations/
+    api_docs: https://docs.sentry.io/api/
+    cli_binary: sentry-cli
+    cli_version_command: [sentry-cli, --version]
+    cli_install:
+      url: https://docs.sentry.io/cli/
+    auth:
+      env: [SENTRY_AUTH_TOKEN]
+      secret_manager:
+        path: /sentry
+        names: [SENTRY_AUTH_TOKEN]
+      cli_session: null
+    optional_env: [SENTRY_ORG_SLUG, SENTRY_BASE_URL]
+    capabilities:
+      health: false
+      inventory: false
+      usage: false
+      billing: false
+    adapter_status: planned
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [optional-error-observability]
+        status: planned
+        evidence:
+          - systems/cloud-platform/cloud-generalist-stack.md
+          - infra/.env.example
+
+  - id: posthog
+    name: PostHog
+    icon: "◍"
+    category: observability
+    dashboard_url: https://us.posthog.com
+    api_docs: https://posthog.com/docs/api
+    cli_binary: posthog-cli
+    cli_version_command: [posthog-cli, --version]
+    cli_install:
+      command: npm install --global @posthog/cli
+      url: https://posthog.com/docs/cli
+    auth:
+      env: [POSTHOG_API_KEY]
+      secret_manager:
+        path: /posthog
+        names: [POSTHOG_API_KEY]
+      cli_session: null
+    optional_env: [POSTHOG_HOST, POSTHOG_PROJECT_ID]
+    capabilities:
+      health: false
+      inventory: false
+      usage: false
+      billing: false
+    adapter_status: planned
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [optional-product-analytics]
+        status: planned
+        evidence:
+          - systems/cloud-platform/cloud-generalist-stack.md
+          - infra/.env.example
+
+  - id: gcp
+    name: Google Cloud
+    icon: "G"
+    category: hyperscaler
+    dashboard_url: https://console.cloud.google.com
+    api_docs: https://cloud.google.com/apis/docs/overview
+    cli_binary: gcloud
+    cli_version_command: [gcloud, --version]
+    cli_version_timeout_seconds: 30
+    cli_install:
+      command: winget install Google.CloudSDK
+      url: https://cloud.google.com/sdk/docs/install
+    auth:
+      env: []
+      secret_manager: null
+      cli_session:
+        check_command: [gcloud, auth, print-access-token, --verbosity=error]
+        token_command: null
+    optional_env: [GOOGLE_CLOUD_PROJECT, GOOGLE_APPLICATION_CREDENTIALS]
+    capabilities:
+      health: true
+      inventory: false
+      usage: false
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [cli-session, oauth-client-setup]
+        status: planned
+        evidence:
+          - infra/platform/cloud-providers.yaml
+        note: Health only proves a local gcloud login; OAuth consent and client IDs are still created in the Cloud Console.
+
+  - id: azure
+    name: Microsoft Azure
+    icon: "A"
+    category: hyperscaler
+    dashboard_url: https://portal.azure.com
+    api_docs: https://learn.microsoft.com/rest/api/azure/
+    cli_binary: az
+    cli_version_command: [az, --version]
+    cli_version_timeout_seconds: 30
+    cli_install:
+      command: winget install Microsoft.AzureCLI
+      url: https://learn.microsoft.com/cli/azure/install-azure-cli
+    auth:
+      env: []
+      secret_manager: null
+      cli_session:
+        check_command: [az, account, show, --output, none]
+        token_command: null
+    optional_env: [AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID]
+    capabilities:
+      health: true
+      inventory: false
+      usage: false
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [cli-session, entra-app-registration]
+        status: planned
+        evidence:
+          - infra/platform/cloud-providers.yaml
+        note: Health only proves a local az login; no Azure resources are verified by this registry entry.
+
+  - id: aws
+    name: Amazon Web Services
+    icon: "▲"
+    category: hyperscaler
+    dashboard_url: https://console.aws.amazon.com
+    api_docs: https://docs.aws.amazon.com/cli/latest/
+    cli_binary: aws
+    cli_version_command: [aws, --version]
+    cli_version_timeout_seconds: 30
+    cli_install:
+      command: winget install Amazon.AWSCLI
+      url: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+    auth:
+      env: []
+      secret_manager: null
+      cli_session:
+        check_command: [aws, sts, get-caller-identity, --output, json]
+        token_command: null
+    optional_env: [AWS_PROFILE, AWS_REGION]
+    capabilities:
+      health: true
+      inventory: false
+      usage: false
+      billing: false
+    adapter_status: partial
+    write_policy: proposal_only
+    paas: false
+    project_usage:
+      - project: solo-empire
+        uses: [cli-session]
+        status: planned
+        evidence:
+          - infra/platform/cloud-providers.yaml
+        note: Health only proves a local AWS CLI credential; prefer IAM Identity Center over root credentials.

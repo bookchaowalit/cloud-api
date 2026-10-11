@@ -1,11 +1,14 @@
 # solo-cloud-api
 
 Moved out of solo-empire `services/cloud-api` on 2026-10-11 with its history (subtree split).
-**Dependency on solo-empire:** the sanitized provider adapters it calls (`cloud_usage`, `paas_action`,
-`paas_execute`, `paas_inventory`, `render_preflight` and their helpers) stay in solo-empire
-`infra/scripts/platform/` because the `task paas:*` tooling uses them; this service imports them from
-`$SOLO_EMPIRE_ROOT` (default `~/solo-empire`). Moving the adapters into this repo is a follow-up.
-Tests: `python3 -m unittest discover -s tests -p 'test_*.py'`.
+**Standalone:** the sanitized provider adapters (`cloud_usage`, `paas_action`, `paas_execute`,
+`paas_inventory`, `render_preflight` and their helpers, including `secret_resolver`, `decision_store`,
+`task_store`) are vendored in `adapters/` (copied from solo-empire `infra/scripts/{platform,utils}`), and the
+registries they read live in `registry/` (`cloud-providers.yaml`, `paas-action-policy.json`,
+`free-resource-index.json`). No solo-empire checkout is needed; `SOLO_EMPIRE_ROOT` is no longer used.
+Optional: `SOLO_ACCOUNTS_ROOT` (a `bookchaowalit/solo-accounts` checkout) enables the account-metadata section;
+a git-ignored `.env` at the repository root is loaded without overriding the shell.
+Tests: `python3 -m unittest discover -s tests -p '*test*.py'`.
 
 ---
 
@@ -21,7 +24,7 @@ The legacy `infra/dashboard` facade was removed from solo-empire on 2026-10-11; 
 
 ## Run
 
-From this repository root, with `SOLO_EMPIRE_ROOT` pointing at the solo-empire checkout (default `~/solo-empire`):
+From this repository root:
 
 ```bash
 python3 server.py
@@ -58,5 +61,5 @@ for the shared `contract` and `route` fields returned by each projection.
 Run the deterministic backend tests with:
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
+python3 -m unittest discover -s tests -p '*test*.py'
 ```

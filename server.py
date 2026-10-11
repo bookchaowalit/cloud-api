@@ -32,13 +32,12 @@ from typing import Any, Mapping
 from urllib.parse import parse_qs, urlsplit
 
 
-# The sanitized provider adapters (cloud_usage, paas_*, render_preflight) still live in the
-# solo-empire checkout (agent tooling).  Point SOLO_EMPIRE_ROOT at it; the default is the
-# conventional checkout location.  This repo does not vendor the adapters.
-REPOSITORY_ROOT = Path(os.environ.get("SOLO_EMPIRE_ROOT") or Path.home() / "solo-empire").expanduser().resolve()
-PLATFORM_ROOT = REPOSITORY_ROOT / "infra" / "scripts" / "platform"
-if str(PLATFORM_ROOT) not in sys.path:
-    sys.path.insert(0, str(PLATFORM_ROOT))
+# The sanitized provider adapters (cloud_usage, paas_*, render_preflight and helpers) are
+# vendored in ./adapters together with the registries they read in ./registry.
+REPOSITORY_ROOT = Path(__file__).resolve().parent
+ADAPTERS_ROOT = REPOSITORY_ROOT / "adapters"
+if str(ADAPTERS_ROOT) not in sys.path:
+    sys.path.insert(0, str(ADAPTERS_ROOT))
 
 import cloud_usage  # noqa: E402
 import paas_action  # noqa: E402

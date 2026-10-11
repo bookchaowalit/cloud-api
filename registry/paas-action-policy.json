@@ -1,0 +1,214 @@
+{
+  "schema_version": "solo-empire.paas-action-policy.v1",
+  "version": 1,
+  "mode": "governed-execution",
+  "execution_enabled": true,
+  "mutating_requests_enabled": true,
+  "execution_disabled_reason": "Only the render-v1 adapter is enabled, for approved web-service actions after live preflight. Other adapters remain disabled.",
+  "approval": {
+    "source_of_truth": "infra/database/solo-empire.db:decision_records",
+    "domain": "paas",
+    "action_type": "external_change",
+    "required": true,
+    "required_status": "approved",
+    "required_approval_status": "approved",
+    "required_action_status": "queued",
+    "max_age_seconds": 3600,
+    "expiry_rule": "Approval is valid for one hour from decided_at; an expired approval requires fresh owner review and cannot execute.",
+    "approval_binding": "paas-proposal fingerprint must match decision_records.source_ref",
+    "no_bypass": true
+  },
+  "request_contract": {
+    "required": [
+      "provider",
+      "action",
+      "resource_type",
+      "resource_id",
+      "environment",
+      "environment_id",
+      "reason"
+    ],
+    "optional": ["operation_id"],
+    "operation_id_rule": "Bounded non-secret identifier; a new value intentionally starts a new operation round while retries reuse the existing request.",
+    "health_path_required_for": ["deploy", "restart", "rollback"],
+    "deploy_requires": ["target_revision"],
+    "rollback_requires": ["rollback_target"],
+    "set_auto_deploy_requires": ["auto_deploy"],
+    "production_requires_approval_id": true,
+    "resource_id_rule": "Provider-owned stable ID only; never a URL, credential, token, or raw payload.",
+    "credential_rule": "Credentials are resolved at execution time only and are never part of a proposal."
+  },
+  "verification": {
+    "preflight": [
+      "provider health is healthy",
+      "resource exists and matches the provider",
+      "target revision or rollback target exists",
+      "rollback target and verification endpoint are recorded",
+      "set-auto-deploy records the requested provider configuration state"
+    ],
+    "post_action": [
+      "provider action reaches a terminal success state",
+      "resource health is healthy",
+      "bounded endpoint smoke check passes",
+      "outcome and provider action identity are recorded",
+      "configuration actions verify the provider state directly"
+    ],
+    "automatic_rollback": false,
+    "rollback_rule": "Rollback is a separate explicit proposal and never an automatic side effect.",
+    "timeout_seconds": 900
+  },
+  "providers": [
+    {
+      "id": "vercel",
+      "name": "Vercel",
+      "resource_types": ["project", "deployment"],
+      "actions": {
+        "deploy": {
+          "support": "manual",
+          "adapter": "disabled",
+          "resource_types": ["project"],
+          "required_fields": ["target_revision"],
+          "surface": "Vercel deployment creation or CLI workflow"
+        },
+        "restart": {
+          "support": "unsupported",
+          "adapter": "none",
+          "resource_types": [],
+          "required_fields": [],
+          "surface": "No provider restart primitive in this control plane"
+        },
+        "rollback": {
+          "support": "supported",
+          "adapter": "disabled",
+          "resource_types": ["project", "deployment"],
+          "required_fields": ["rollback_target"],
+          "surface": "Promote/restore a previous production deployment"
+        }
+      },
+      "docs": "https://vercel.com/docs/rest-api"
+    },
+    {
+      "id": "render",
+      "name": "Render",
+      "resource_types": ["service", "deploy"],
+      "actions": {
+        "deploy": {
+          "support": "supported",
+          "adapter": "render-v1",
+          "resource_types": ["service"],
+          "required_fields": ["target_revision"],
+          "surface": "POST /v1/services/{serviceId}/deploys"
+        },
+        "restart": {
+          "support": "supported",
+          "adapter": "render-v1",
+          "resource_types": ["service"],
+          "required_fields": [],
+          "surface": "POST /v1/services/{serviceId}/restart"
+        },
+        "rollback": {
+          "support": "supported",
+          "adapter": "render-v1",
+          "resource_types": ["service", "deploy"],
+          "required_fields": ["rollback_target"],
+          "surface": "POST /v1/services/{serviceId}/rollback"
+        },
+        "set-auto-deploy": {
+          "support": "supported",
+          "adapter": "render-v1",
+          "resource_types": ["service"],
+          "required_fields": ["auto_deploy"],
+          "surface": "PATCH /v1/services/{serviceId} with autoDeploy yes/no"
+        }
+      },
+      "docs": "https://api-docs.render.com/reference/introduction"
+    },
+    {
+      "id": "railway",
+      "name": "Railway",
+      "resource_types": ["service", "environment", "deployment"],
+      "actions": {
+        "deploy": {
+          "support": "supported",
+          "adapter": "disabled",
+          "resource_types": ["service", "environment"],
+          "required_fields": ["target_revision"],
+          "surface": "Railway Public GraphQL API deploy operation"
+        },
+        "restart": {
+          "support": "supported",
+          "adapter": "disabled",
+          "resource_types": ["deployment"],
+          "required_fields": [],
+          "surface": "Railway Public GraphQL API restart operation"
+        },
+        "rollback": {
+          "support": "supported",
+          "adapter": "disabled",
+          "resource_types": ["service", "deployment"],
+          "required_fields": ["rollback_target"],
+          "surface": "Railway Public GraphQL API rollback operation"
+        }
+      },
+      "docs": "https://docs.railway.com/integrations/api/manage-deployments"
+    },
+    {
+      "id": "fly-io",
+      "name": "Fly.io",
+      "resource_types": ["app", "machine"],
+      "actions": {
+        "deploy": {
+          "support": "manual",
+          "adapter": "disabled",
+          "resource_types": ["app"],
+          "required_fields": ["target_revision"],
+          "surface": "fly deploy or a reviewed Machines image/config workflow"
+        },
+        "restart": {
+          "support": "supported",
+          "adapter": "disabled",
+          "resource_types": ["app", "machine"],
+          "required_fields": [],
+          "surface": "Fly Apps/Machines restart workflow"
+        },
+        "rollback": {
+          "support": "manual",
+          "adapter": "disabled",
+          "resource_types": ["app", "machine"],
+          "required_fields": ["rollback_target"],
+          "surface": "Re-deploy a known-good image or release through a reviewed workflow"
+        }
+      },
+      "docs": "https://fly.io/docs/machines/api/"
+    },
+    {
+      "id": "heroku",
+      "name": "Heroku",
+      "resource_types": ["app", "dyno", "release"],
+      "actions": {
+        "deploy": {
+          "support": "manual",
+          "adapter": "disabled",
+          "resource_types": ["app"],
+          "required_fields": ["target_revision"],
+          "surface": "Heroku Git, Container Registry, or reviewed Platform API release workflow"
+        },
+        "restart": {
+          "support": "supported",
+          "adapter": "disabled",
+          "resource_types": ["app", "dyno"],
+          "required_fields": [],
+          "surface": "Heroku dyno restart workflow"
+        },
+        "rollback": {
+          "support": "supported",
+          "adapter": "disabled",
+          "resource_types": ["app", "release"],
+          "required_fields": ["rollback_target"],
+          "surface": "POST /apps/{app}/releases with an eligible release target"
+        }
+      },
+      "docs": "https://devcenter.heroku.com/articles/platform-api-reference"
+    }
+  ]
+}
