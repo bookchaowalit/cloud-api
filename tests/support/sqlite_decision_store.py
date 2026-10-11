@@ -19,7 +19,7 @@ from typing import Any
 
 # Safety: a test that imports this double must never reach the live decisions API.
 os.environ.pop("EMPIRE_DECISIONS_API", None)
-os.environ["EMPIRE_CLIENT_CONFIG"] = "/nonexistent/solo-empire-test/client.env"
+os.environ["EMPIRE_CLIENT_CONFIG"] = "/nonexistent/test/client.env"
 
 LEGACY_DDL = Path(__file__).resolve().parent / "legacy_decision_tables.sql"
 FIELDS = ("title", "domain", "decision", "rationale", "evidence_refs", "confidence", "expected_outcome",

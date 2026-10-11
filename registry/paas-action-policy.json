@@ -6,7 +6,7 @@
   "mutating_requests_enabled": true,
   "execution_disabled_reason": "Only the render-v1 adapter is enabled, for approved web-service actions after live preflight. Other adapters remain disabled.",
   "approval": {
-    "source_of_truth": "infra/database/solo-empire.db:decision_records",
+    "source_of_truth": "decisions API: decision_records",
     "domain": "paas",
     "action_type": "external_change",
     "required": true,

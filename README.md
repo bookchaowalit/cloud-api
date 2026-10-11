@@ -5,7 +5,7 @@ Moved out of solo-empire `services/cloud-api` on 2026-10-11 with its history (su
 `paas_inventory`, `render_preflight` and their helpers, including `secret_resolver`, `decision_store`,
 `task_store`) are vendored in `adapters/` (copied from solo-empire `infra/scripts/{platform,utils}`), and the
 registries they read live in `registry/` (`cloud-providers.yaml`, `paas-action-policy.json`,
-`free-resource-index.json`). No solo-empire checkout is needed; `SOLO_EMPIRE_ROOT` is no longer used.
+`free-resource-index.json`). No other checkout is needed.
 Optional: `SOLO_ACCOUNTS_ROOT` (a `bookchaowalit/solo-accounts` checkout) enables the account-metadata section;
 a git-ignored `.env` at the repository root is loaded without overriding the shell.
 Tests: `python3 -m unittest discover -s tests -p '*test*.py'`.
