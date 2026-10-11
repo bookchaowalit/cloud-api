@@ -1,0 +1,8 @@
+system_id: bookchaowalit/private/solo-cloud-api
+prefix: CARD
+brand: "CLOUD API"
+subtitle: "Backend `cloud.v1` อ่านการใช้และ inventory ของผู้ให้บริการ cloud/PaaS แบบ sanitized"
+footer: "solo-cloud-api — Product Card"
+color: "#005f73"
+audience: internal
+tier: L0
