@@ -1,3 +1,14 @@
+# solo-cloud-api
+
+Moved out of solo-empire `services/cloud-api` on 2026-10-11 with its history (subtree split).
+**Dependency on solo-empire:** the sanitized provider adapters it calls (`cloud_usage`, `paas_action`,
+`paas_execute`, `paas_inventory`, `render_preflight` and their helpers) stay in solo-empire
+`infra/scripts/platform/` because the `task paas:*` tooling uses them; this service imports them from
+`$SOLO_EMPIRE_ROOT` (default `~/solo-empire`). Moving the adapters into this repo is a follow-up.
+Tests: `python3 -m unittest discover -s tests -p 'test_*.py'`.
+
+---
+
 # Solo Empire Cloud API
 
 `cloud-api` is the independently runnable backend for the Cloud/PaaS
@@ -5,16 +16,15 @@ extraction pilot. It exposes the existing sanitized usage and inventory
 projections through a versioned `cloud.v1` contract; it does not read provider
 credentials in the browser and it never returns provider payloads.
 
-The existing `infra/dashboard` remains a compatibility facade while the
-frontend and backend are verified independently. Advanced dashboard surfaces
-can continue to use the legacy routes until their contract parity is accepted.
+The legacy `infra/dashboard` facade was removed from solo-empire on 2026-10-11; `solo-web`
+(`bookchaowalit/solo-web`) is the web surface.
 
 ## Run
 
-From the repository root:
+From this repository root, with `SOLO_EMPIRE_ROOT` pointing at the solo-empire checkout (default `~/solo-empire`):
 
 ```bash
-python3 services/cloud-api/server.py
+python3 server.py
 ```
 
 The default listener is `http://127.0.0.1:3440`. Configure `CLOUD_API_HOST`,
@@ -48,5 +58,5 @@ for the shared `contract` and `route` fields returned by each projection.
 Run the deterministic backend tests with:
 
 ```bash
-python3 -m unittest discover -s services/cloud-api/tests -p 'test_*.py'
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```

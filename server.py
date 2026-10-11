@@ -9,7 +9,7 @@ platform adapters and never enter an HTTP response.
 
 Run from the repository root::
 
-    python3 services/cloud-api/server.py
+    python3 server.py
 
 The default bind is ``127.0.0.1:3440``.  A non-loopback bind requires
 ``CLOUD_API_TOKEN`` and should also be placed behind TLS and an authenticated
@@ -32,7 +32,10 @@ from typing import Any, Mapping
 from urllib.parse import parse_qs, urlsplit
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+# The sanitized provider adapters (cloud_usage, paas_*, render_preflight) still live in the
+# solo-empire checkout (agent tooling).  Point SOLO_EMPIRE_ROOT at it; the default is the
+# conventional checkout location.  This repo does not vendor the adapters.
+REPOSITORY_ROOT = Path(os.environ.get("SOLO_EMPIRE_ROOT") or Path.home() / "solo-empire").expanduser().resolve()
 PLATFORM_ROOT = REPOSITORY_ROOT / "infra" / "scripts" / "platform"
 if str(PLATFORM_ROOT) not in sys.path:
     sys.path.insert(0, str(PLATFORM_ROOT))

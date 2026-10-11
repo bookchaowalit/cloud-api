@@ -36,6 +36,6 @@
     "max_command_body_bytes": 16384,
     "command_boundary": "loopback peer + allowed local Origin + X-Solo-PaaS-Command: 1 + application/json + optional bearer token",
     "approval_authority": "infra/scripts/platform/paas_execute.py",
-    "legacy_facade": "infra/dashboard remains available during the extraction pilot"
+    "legacy_facade": "retired 2026-10-11 (infra/dashboard removed from solo-empire)"
   }
 }
