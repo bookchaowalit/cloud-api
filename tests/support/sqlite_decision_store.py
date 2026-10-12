@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test double: the retired SQLite decision tables behind the ``ApiDecisionStore`` interface.
 
-Decisions live in the decisions cell (solo-decisions) since 2026-10-10;
+Decisions live in the decisions cell (decisions) since 2026-10-10;
 production code uses ``open_decision_store`` only and must not import this
 module. Behaviour tests patch ``open_decision_store`` to return this double
 over a temporary SQLite database with ``legacy_decision_tables.sql`` applied.

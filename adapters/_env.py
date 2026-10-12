@@ -8,7 +8,7 @@ root (git-ignored) is loaded by ``load_env`` without overriding the shell.
 import os
 from pathlib import Path
 
-# adapters/ -> solo-cloud-api repository root
+# adapters/ -> cloud-api repository root
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 

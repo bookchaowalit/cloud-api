@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decisions live in the decisions cell (solo-decisions); this is its client.
+"""Decisions live in the decisions cell (decisions); this is its client.
 
 Every reader and writer of decision records, events and reviews goes through
 ``open_decision_store`` instead of the retired SQLite tables. The API URL comes
