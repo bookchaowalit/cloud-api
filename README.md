@@ -6,7 +6,7 @@ Moved out of solo-empire `services/cloud-api` on 2026-10-11 with its history (su
 `task_store`) are vendored in `adapters/` (copied from solo-empire `infra/scripts/{platform,utils}`), and the
 registries they read live in `registry/` (`cloud-providers.yaml`, `paas-action-policy.json`,
 `free-resource-index.json`). No other checkout is needed.
-Optional: `SOLO_ACCOUNTS_ROOT` (a `bookchaowalit/platform-accounts-api` checkout) enables the account-metadata section;
+Optional: `SOLO_ACCOUNTS_ROOT` (a `bookchaowalit/accounts` checkout) enables the account-metadata section;
 a git-ignored `.env` at the repository root is loaded without overriding the shell.
 Tests: `python3 -m unittest discover -s tests -p '*test*.py'`.
 
@@ -20,7 +20,7 @@ projections through a versioned `cloud.v1` contract; it does not read provider
 credentials in the browser and it never returns provider payloads.
 
 The legacy `infra/dashboard` facade was removed from solo-empire on 2026-10-11; `owner-web`
-(`bookchaowalit/life-dashboard-web`) is the web surface.
+(`bookchaowalit/owner-web`) is the web surface.
 
 ## Run
 
