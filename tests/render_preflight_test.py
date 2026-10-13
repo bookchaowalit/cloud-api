@@ -6,8 +6,13 @@ from __future__ import annotations
 import importlib.util
 import json
 import unittest
+import urllib.error
+import urllib.request
+from email.message import Message
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
+from urllib.response import addinfourl
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +22,138 @@ if SPEC is None or SPEC.loader is None:
     raise RuntimeError(f"Unable to load {MODULE_PATH}")
 render_preflight = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(render_preflight)
+
+
+class ProbeBody(BytesIO):
+    def __init__(self):
+        super().__init__(b"")
+        self.read_calls = 0
+
+    def read(self, *args):
+        self.read_calls += 1
+        return super().read(*args)
+
+
+class ProbeTransport(urllib.request.HTTPHandler, urllib.request.HTTPSHandler):
+    """Replace network I/O while retaining urllib's actual redirect/error logic."""
+
+    def __init__(self, initial_url, status, location=None, error=None):
+        super().__init__()
+        self.initial_url, self.status, self.location, self.error = initial_url, status, location, error
+        self.requests = []
+        self.bodies = []
+
+    def http_open(self, request):
+        self.requests.append(request)
+        if self.error:
+            raise self.error
+        headers = Message()
+        if request.full_url == self.initial_url and self.location:
+            headers["Location"] = self.location
+        body = ProbeBody()
+        self.bodies.append(body)
+        response = addinfourl(body, headers, request.full_url,
+                              self.status if request.full_url == self.initial_url else 200)
+        response.msg = "Synthetic health response"
+        return response
+
+    https_open = http_open
+
+
+class RenderProbeTest(unittest.TestCase):
+    def probe(self, transport, operation=None):
+        real_builder = urllib.request.build_opener
+        original_global = urllib.request._opener
+        # Cover old urlopen and the per-probe opener without installing a global opener.
+        opener = real_builder(transport)
+        with patch.object(render_preflight.urllib.request, "urlopen", side_effect=opener.open), patch.object(
+            render_preflight.urllib.request, "build_opener", side_effect=lambda *handlers: real_builder(transport, *handlers)
+        ), patch.object(render_preflight.urllib.request, "install_opener") as install:
+            result = operation() if operation else render_preflight._probe_url(transport.initial_url)
+        install.assert_not_called()
+        self.assertIs(urllib.request._opener, original_global)
+        return result
+
+    def assert_single_probe(self, transport):
+        self.assertEqual([request.full_url for request in transport.requests], [transport.initial_url])
+        request = transport.requests[0]
+        self.assertEqual(request.timeout, 20)
+        self.assertEqual(request.get_method(), "GET")
+        self.assertIsNone(request.data)
+        self.assertEqual({name.lower() for name, _ in request.header_items()}, {"accept", "user-agent", "host"})
+        self.assertTrue(all(body.read_calls == 0 for body in transport.bodies))
+
+    def test_redirects_are_blocked_without_requesting_location(self):
+        for scheme in ("http", "https"):
+            for status in (301, 302, 303, 307, 308):
+                for location in ("https://other.example/ready", "/ready", "http://127.0.0.1:1/admin"):
+                    with self.subTest(scheme=scheme, status=status, location=location):
+                        transport = ProbeTransport(f"{scheme}://fixture.onrender.com/health", status, location)
+                        result = self.probe(transport)
+                        self.assert_single_probe(transport)
+                        self.assertEqual(result.get("http_status"), status)
+                        self.assertEqual(result["status"], "blocked")
+                        self.assertEqual(result["error_class"], f"http_{status}")
+                        self.assertNotIn(location, json.dumps(result))
+
+    def test_direct_responses_keep_status_and_never_read_bodies_or_add_auth(self):
+        for scheme in ("http", "https"):
+            for status in (200, 204, 299, 400, 503):
+                with self.subTest(scheme=scheme, status=status):
+                    transport = ProbeTransport(f"{scheme}://fixture.onrender.com/health", status)
+                    with patch.object(render_preflight, "resolve_provider_auth") as resolve:
+                        result = self.probe(transport)
+                    self.assertEqual(result["status"], "passed" if status < 300 else "blocked")
+                    self.assertEqual(result["http_status"], status)
+                    self.assert_single_probe(transport)
+                    resolve.assert_not_called()
+
+    def test_probe_errors_are_sanitized(self):
+        for error, expected in ((TimeoutError("synthetic-error-marker"), "provider_timeout"),
+                                (urllib.error.URLError("synthetic-error-marker"), "provider_unreachable")):
+            with self.subTest(error=type(error).__name__):
+                transport = ProbeTransport("https://fixture.onrender.com/health", 200, error=error)
+                result = self.probe(transport)
+                self.assertEqual(result, {"status": "blocked", "error_class": expected})
+                self.assert_single_probe(transport)
+                self.assertNotIn("synthetic-error-marker", json.dumps(result))
+
+    def test_all_preflight_callers_block_redirected_health(self):
+        service = {"id": "srv-fixture", "type": "web_service", "environmentId": "env-staging", "autoDeploy": "no"}
+        environment = {"id": "env-staging", "name": "staging"}
+        deploy = {"id": "dep-fixture", "serviceId": "srv-fixture", "status": "deactivated"}
+        health_url = "https://fixture.onrender.com/health"
+        for source in ("api", "cli", "action"):
+            with self.subTest(source=source):
+                transport = ProbeTransport(health_url, 302, "http://127.0.0.1:1/admin")
+                arguments = dict(live=True, service_id=service["id"], environment_id=environment["id"],
+                                 target_deploy_id=deploy["id"], health_url=health_url)
+                if source == "action":
+                    discovery = {"status": "ready", "external_calls": 2, "credentials": {"status": "cli_session", "missing": []},
+                                 "services": [{"id": service["id"], "type": "web_service", "environment_id": environment["id"],
+                                               "environment_name": "staging", "auto_deploy": "no", "health_host": "fixture.onrender.com"}],
+                                 "deploys": [{"id": "dep-live", "service_id": service["id"], "status": "live"}]}
+                    with patch.object(render_preflight, "discover", return_value=discovery):
+                        result = self.probe(transport, lambda: render_preflight.action_preflight(
+                            live=True, source="cli", action="restart", service_id=service["id"],
+                            environment_id=environment["id"], health_path="/health"))
+                elif source == "cli":
+                    with patch.object(render_preflight, "_run_cli", side_effect=[
+                        [{"service": service, "environment": environment}], [deploy]
+                    ]):
+                        result = self.probe(transport, lambda: render_preflight.preflight(source="cli", **arguments))
+                else:
+                    auth = RenderPreflightTest._configured_auth()
+                    with patch.object(render_preflight, "resolve_provider_auth", return_value=auth), patch.object(
+                        render_preflight, "_get_json", side_effect=[service, environment, deploy]
+                    ):
+                        result = self.probe(transport, lambda: render_preflight.preflight(source="api", **arguments))
+                self.assertFalse(result["preflight_passed"])
+                self.assertIn("health-endpoint-not-healthy", result["blockers"])
+                self.assertEqual(result["checks"]["health_endpoint"]["http_status"], 302)
+                self.assertFalse(result["execution_allowed"])
+                self.assertFalse(result["write_attempted"])
+                self.assert_single_probe(transport)
 
 
 class RenderPreflightTest(unittest.TestCase):

@@ -235,6 +235,13 @@ def _clean_deploy(deploy: dict[str, Any], service_id: str | None = None) -> dict
     }
 
 
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    """Keep each health probe on its explicitly selected URL."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _probe_url(url: str) -> dict[str, Any]:
     request = urllib.request.Request(
         url,
@@ -245,7 +252,8 @@ def _probe_url(url: str) -> dict[str, Any]:
         method="GET",
     )
     try:
-        with urllib.request.urlopen(request, timeout=HEALTH_PROBE_TIMEOUT_SECONDS) as response:
+        opener = urllib.request.build_opener(_NoRedirects())
+        with opener.open(request, timeout=HEALTH_PROBE_TIMEOUT_SECONDS) as response:
             status = int(response.status)
         return {"status": "passed" if 200 <= status < 300 else "blocked", "http_status": status}
     except Exception as exc:
