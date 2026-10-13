@@ -59,7 +59,7 @@ from vercel_billing import run_billing as run_vercel_billing  # noqa: E402
 
 
 SCHEMA_VERSION = "solo-empire.cloud-usage.v1"
-# Account metadata lives in the bookchaowalit/accounts repository; point SOLO_ACCOUNTS_ROOT at a
+# Account metadata lives in the bookchaowalit/platform-accounts-api repository; point SOLO_ACCOUNTS_ROOT at a
 # checkout (default: ``accounts/`` is absent, so the account section is empty).
 ACCOUNTS_REPO = Path(os.environ.get("SOLO_ACCOUNTS_ROOT") or PROJECT_ROOT / "accounts")
 ACCOUNT_ROOT = ACCOUNTS_REPO / "accounts" / "cloud"
