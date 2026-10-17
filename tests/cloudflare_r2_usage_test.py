@@ -21,7 +21,9 @@ SPEC.loader.exec_module(cloudflare_r2_usage)
 
 class CloudflareR2UsageTest(unittest.TestCase):
     def test_offline_mode_does_not_read_secrets_or_call_provider(self):
-        secret_getter = Mock(side_effect=AssertionError("offline must not resolve secrets"))
+        secret_getter = Mock(
+            side_effect=AssertionError("offline must not resolve secrets")
+        )
         fetcher = Mock(side_effect=AssertionError("offline must not call provider"))
 
         payload = cloudflare_r2_usage.run_metrics(
@@ -48,12 +50,28 @@ class CloudflareR2UsageTest(unittest.TestCase):
                 "success": True,
                 "result": {
                     "standard": {
-                        "published": {"metadataSize": 100, "objects": 2, "payloadSize": 12_000_000_000},
-                        "uploaded": {"metadataSize": 10, "objects": 1, "payloadSize": 512},
+                        "published": {
+                            "metadataSize": 100,
+                            "objects": 2,
+                            "payloadSize": 12_000_000_000,
+                        },
+                        "uploaded": {
+                            "metadataSize": 10,
+                            "objects": 1,
+                            "payloadSize": 512,
+                        },
                     },
                     "infrequentAccess": {
-                        "published": {"metadataSize": 50, "objects": 3, "payloadSize": 3_000_000_000},
-                        "uploaded": {"metadataSize": 5, "objects": 1, "payloadSize": 256},
+                        "published": {
+                            "metadataSize": 50,
+                            "objects": 3,
+                            "payloadSize": 3_000_000_000,
+                        },
+                        "uploaded": {
+                            "metadataSize": 5,
+                            "objects": 1,
+                            "payloadSize": 256,
+                        },
                     },
                 },
             }
@@ -70,8 +88,15 @@ class CloudflareR2UsageTest(unittest.TestCase):
         self.assertEqual(payload["object_count"], 5)
         self.assertEqual(payload["payload_bytes"], 15_000_000_000)
         self.assertEqual(payload["uploaded_object_count"], 2)
-        self.assertEqual(payload["storage_classes"]["standard"]["published"]["object_count"], 2)
-        self.assertEqual(payload["storage_classes"]["infrequent_access"]["published"]["payload_bytes"], 3_000_000_000)
+        self.assertEqual(
+            payload["storage_classes"]["standard"]["published"]["object_count"], 2
+        )
+        self.assertEqual(
+            payload["storage_classes"]["infrequent_access"]["published"][
+                "payload_bytes"
+            ],
+            3_000_000_000,
+        )
         self.assertFalse(payload["billing_connected"])
         estimate = payload["storage_cost_estimate"]
         self.assertEqual(estimate["status"], "estimate_only")

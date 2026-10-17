@@ -8,7 +8,7 @@ import json
 import urllib.error
 import urllib.parse
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -24,8 +24,12 @@ SPEC.loader.exec_module(github_actions_usage)
 
 class GitHubActionsUsageTest(unittest.TestCase):
     def test_offline_mode_does_not_read_secrets_or_call_provider(self):
-        secret_getter = Mock(side_effect=AssertionError("offline must not resolve secrets"))
-        env_getter = Mock(side_effect=AssertionError("offline must not read provider config"))
+        secret_getter = Mock(
+            side_effect=AssertionError("offline must not resolve secrets")
+        )
+        env_getter = Mock(
+            side_effect=AssertionError("offline must not read provider config")
+        )
         fetcher = Mock(side_effect=AssertionError("offline must not call provider"))
 
         payload = github_actions_usage.run_usage(
@@ -43,9 +47,15 @@ class GitHubActionsUsageTest(unittest.TestCase):
         env_getter.assert_not_called()
         fetcher.assert_not_called()
 
-    def test_user_report_aggregates_actions_and_plan_allowance_without_raw_records(self):
+    def test_user_report_aggregates_actions_and_plan_allowance_without_raw_records(
+        self,
+    ):
         secret_getter = Mock(return_value="github-secret-token")
-        env_values = {"GITHUB_BILLING_OWNER_TYPE": "user", "GITHUB_BILLING_OWNER": None, "GITHUB_ACTIONS_PLAN": None}
+        env_values = {
+            "GITHUB_BILLING_OWNER_TYPE": "user",
+            "GITHUB_BILLING_OWNER": None,
+            "GITHUB_ACTIONS_PLAN": None,
+        }
         env_getter = Mock(side_effect=lambda name: env_values.get(name))
 
         def fetcher(url, headers):
@@ -54,13 +64,35 @@ class GitHubActionsUsageTest(unittest.TestCase):
                 return {"login": "private-user", "plan": {"name": "Free"}}
             parsed = urllib.parse.urlparse(url)
             self.assertEqual(parsed.path, "/users/private-user/settings/billing/usage")
-            self.assertEqual(urllib.parse.parse_qs(parsed.query), {"year": ["2026"], "month": ["9"]})
+            self.assertEqual(
+                urllib.parse.parse_qs(parsed.query), {"year": ["2026"], "month": ["9"]}
+            )
             return {
                 "usageItems": [
-                    {"product": "Actions", "sku": "Actions Linux", "unitType": "minutes", "quantity": 120},
-                    {"product": "Actions", "sku": "Actions Storage", "unitType": "GB-Hours", "quantity": 10.5},
-                    {"product": "Actions", "sku": "Actions Cache Storage", "unitType": "GB-Hours", "grossQuantity": 2},
-                    {"product": "Other", "sku": "Other", "unitType": "minutes", "quantity": 999},
+                    {
+                        "product": "Actions",
+                        "sku": "Actions Linux",
+                        "unitType": "minutes",
+                        "quantity": 120,
+                    },
+                    {
+                        "product": "Actions",
+                        "sku": "Actions Storage",
+                        "unitType": "GB-Hours",
+                        "quantity": 10.5,
+                    },
+                    {
+                        "product": "Actions",
+                        "sku": "Actions Cache Storage",
+                        "unitType": "GB-Hours",
+                        "grossQuantity": 2,
+                    },
+                    {
+                        "product": "Other",
+                        "sku": "Other",
+                        "unitType": "minutes",
+                        "quantity": 999,
+                    },
                 ]
             }
 
@@ -69,7 +101,7 @@ class GitHubActionsUsageTest(unittest.TestCase):
             secret_getter=secret_getter,
             env_getter=env_getter,
             fetcher=fetcher,
-            now=datetime(2026, 9, 14, tzinfo=timezone.utc),
+            now=datetime(2026, 9, 14, tzinfo=UTC),
         )
 
         self.assertEqual(payload["status"], "healthy")
@@ -101,15 +133,21 @@ class GitHubActionsUsageTest(unittest.TestCase):
         fetcher = Mock(
             side_effect=[
                 {"login": "private-user", "plan": {"name": "Free"}},
-                {"usageItems": [{"product": "Actions", "unitType": "minutes", "quantity": 1}]},
+                {
+                    "usageItems": [
+                        {"product": "Actions", "unitType": "minutes", "quantity": 1}
+                    ]
+                },
             ]
         )
-        with patch.object(github_actions_usage, "resolve_provider_auth", return_value=auth) as resolver:
+        with patch.object(
+            github_actions_usage, "resolve_provider_auth", return_value=auth
+        ) as resolver:
             payload = github_actions_usage.run_usage(
                 live=True,
                 env_getter=Mock(return_value=None),
                 fetcher=fetcher,
-                now=datetime(2026, 9, 14, tzinfo=timezone.utc),
+                now=datetime(2026, 9, 14, tzinfo=UTC),
             )
 
         resolver.assert_called_once_with(github_actions_usage.GITHUB_PROVIDER)
@@ -122,9 +160,15 @@ class GitHubActionsUsageTest(unittest.TestCase):
         self.assertNotIn(auth.credential, json.dumps(payload))
 
     def test_cli_session_without_token_does_not_call_billing_api(self):
-        auth = github_actions_usage.AuthResolution(status="configured", auth_source="cli_session")
-        fetcher = Mock(side_effect=AssertionError("billing API must not be called without a token"))
-        with patch.object(github_actions_usage, "resolve_provider_auth", return_value=auth):
+        auth = github_actions_usage.AuthResolution(
+            status="configured", auth_source="cli_session"
+        )
+        fetcher = Mock(
+            side_effect=AssertionError("billing API must not be called without a token")
+        )
+        with patch.object(
+            github_actions_usage, "resolve_provider_auth", return_value=auth
+        ):
             payload = github_actions_usage.run_usage(
                 live=True,
                 env_getter=Mock(return_value=None),
@@ -137,8 +181,14 @@ class GitHubActionsUsageTest(unittest.TestCase):
         fetcher.assert_not_called()
 
     def test_organization_requires_owner_without_calling_provider(self):
-        fetcher = Mock(side_effect=AssertionError("missing owner must fail before provider call"))
-        env_values = {"GITHUB_BILLING_OWNER_TYPE": "organization", "GITHUB_BILLING_OWNER": None, "GITHUB_ACTIONS_PLAN": None}
+        fetcher = Mock(
+            side_effect=AssertionError("missing owner must fail before provider call")
+        )
+        env_values = {
+            "GITHUB_BILLING_OWNER_TYPE": "organization",
+            "GITHUB_BILLING_OWNER": None,
+            "GITHUB_ACTIONS_PLAN": None,
+        }
         payload = github_actions_usage.run_usage(
             live=True,
             secret_getter=Mock(return_value="token"),
@@ -152,7 +202,13 @@ class GitHubActionsUsageTest(unittest.TestCase):
         fetcher.assert_not_called()
 
     def test_billing_forbidden_is_sanitized(self):
-        error = urllib.error.HTTPError("https://api.github.com/users/user/settings/billing/usage", 403, "private provider body", {}, None)
+        error = urllib.error.HTTPError(
+            "https://api.github.com/users/user/settings/billing/usage",
+            403,
+            "private provider body",
+            {},
+            None,
+        )
 
         def fetcher(url, headers):
             if url == "https://api.github.com/user":

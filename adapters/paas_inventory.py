@@ -12,9 +12,10 @@ import json
 import sys
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -136,7 +137,9 @@ def _finish(
 ) -> dict[str, Any]:
     result["status"] = "healthy"
     returned = min(len(resources), MAX_ITEMS)
-    observed = len(resources) if source_count is None else max(len(resources), source_count, 0)
+    observed = (
+        len(resources) if source_count is None else max(len(resources), source_count, 0)
+    )
     more = observed > returned if has_more is None else bool(has_more)
     partial = more or observed > returned
     result["resources"] = resources[:MAX_ITEMS]
@@ -163,16 +166,29 @@ def _vercel(provider: dict[str, Any], live: bool) -> dict[str, Any]:
         return _configured(result)
     token = auth.credential
     try:
-        _get_json("https://api.vercel.com/v2/user", {"Authorization": f"Bearer {token}"})
+        _get_json(
+            "https://api.vercel.com/v2/user", {"Authorization": f"Bearer {token}"}
+        )
     except Exception as exc:
         return _vercel_error(result, _safe_error(exc), auth_endpoint=True)
     try:
         query = urllib.parse.urlencode({"limit": str(MAX_ITEMS)})
-        team_id = get_env("VERCEL_TEAM_ID") if "VERCEL_TEAM_ID" in provider.get("optional_env", []) else None
+        team_id = (
+            get_env("VERCEL_TEAM_ID")
+            if "VERCEL_TEAM_ID" in provider.get("optional_env", [])
+            else None
+        )
         if team_id:
             query += "&" + urllib.parse.urlencode({"teamId": team_id})
-        payload = _get_json(f"https://api.vercel.com/v9/projects?{query}", {"Authorization": f"Bearer {token}"})
-        projects = payload.get("projects") if isinstance(payload, dict) and isinstance(payload.get("projects"), list) else []
+        payload = _get_json(
+            f"https://api.vercel.com/v9/projects?{query}",
+            {"Authorization": f"Bearer {token}"},
+        )
+        projects = (
+            payload.get("projects")
+            if isinstance(payload, dict) and isinstance(payload.get("projects"), list)
+            else []
+        )
         resources = [
             {
                 "id": item.get("id"),
@@ -204,7 +220,10 @@ def _render(provider: dict[str, Any], live: bool) -> dict[str, Any]:
         return _configured(result)
     token = auth.credential
     try:
-        payload = _get_json(f"https://api.render.com/v1/services?limit={MAX_ITEMS}", {"Authorization": f"Bearer {token}"})
+        payload = _get_json(
+            f"https://api.render.com/v1/services?limit={MAX_ITEMS}",
+            {"Authorization": f"Bearer {token}"},
+        )
         items = payload.get("items") if isinstance(payload, dict) else []
         resources = []
         for item in items if isinstance(items, list) else []:
@@ -232,10 +251,16 @@ def _render(provider: dict[str, Any], live: bool) -> dict[str, Any]:
         return _response_error(result, exc)
 
 
-def _vercel_error(result: dict[str, Any], error_class: str, *, auth_endpoint: bool) -> dict[str, Any]:
+def _vercel_error(
+    result: dict[str, Any], error_class: str, *, auth_endpoint: bool
+) -> dict[str, Any]:
     result["status"] = "error"
     if error_class == "http_403":
-        result["error_class"] = "vercel_token_forbidden" if auth_endpoint else "vercel_project_access_forbidden"
+        result["error_class"] = (
+            "vercel_token_forbidden"
+            if auth_endpoint
+            else "vercel_project_access_forbidden"
+        )
         result["detail"] = (
             "Vercel denied the token at the user endpoint; verify the token is a Vercel REST API token and is not expired."
             if auth_endpoint
@@ -286,12 +311,21 @@ def _railway(provider: dict[str, Any], live: bool) -> dict[str, Any]:
         data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
         root = data.get(root_key) if isinstance(data.get(root_key), dict) else {}
         if root_key == "workspace":
-            projects_root = root.get("projects") if isinstance(root.get("projects"), dict) else {}
-            edges = projects_root.get("edges") if isinstance(projects_root.get("edges"), list) else []
+            projects_root = (
+                root.get("projects") if isinstance(root.get("projects"), dict) else {}
+            )
+            edges = (
+                projects_root.get("edges")
+                if isinstance(projects_root.get("edges"), list)
+                else []
+            )
         else:
             edges = root.get("edges") if isinstance(root.get("edges"), list) else []
         resources = [
-            {"id": edge.get("node", {}).get("id"), "name": edge.get("node", {}).get("name")}
+            {
+                "id": edge.get("node", {}).get("id"),
+                "name": edge.get("node", {}).get("name"),
+            }
             for edge in edges
             if isinstance(edge, dict) and isinstance(edge.get("node"), dict)
         ]
@@ -316,16 +350,29 @@ def _fly(provider: dict[str, Any], live: bool) -> dict[str, Any]:
     if not auth.credential:
         return _configured(result)
     token = auth.credential
-    org_slug = get_env("FLY_ORG_SLUG") if "FLY_ORG_SLUG" in provider.get("optional_env", []) else None
+    org_slug = (
+        get_env("FLY_ORG_SLUG")
+        if "FLY_ORG_SLUG" in provider.get("optional_env", [])
+        else None
+    )
     if not org_slug:
         return _missing(
             result,
-            ["FLY_ORG_SLUG"] if "FLY_ORG_SLUG" in provider.get("optional_env", []) else [],
+            ["FLY_ORG_SLUG"]
+            if "FLY_ORG_SLUG" in provider.get("optional_env", [])
+            else [],
         )
     try:
         query = urllib.parse.urlencode({"org_slug": org_slug})
-        payload = _get_json(f"https://api.machines.dev/v1/apps?{query}", {"Authorization": f"Bearer {token}"})
-        apps = payload.get("apps") if isinstance(payload, dict) and isinstance(payload.get("apps"), list) else []
+        payload = _get_json(
+            f"https://api.machines.dev/v1/apps?{query}",
+            {"Authorization": f"Bearer {token}"},
+        )
+        apps = (
+            payload.get("apps")
+            if isinstance(payload, dict) and isinstance(payload.get("apps"), list)
+            else []
+        )
         resources = [
             {
                 "id": item.get("id"),
@@ -361,7 +408,10 @@ def _heroku(provider: dict[str, Any], live: bool) -> dict[str, Any]:
     try:
         payload = _get_json(
             "https://api.heroku.com/apps",
-            {"Authorization": f"Bearer {token}", "Accept": "application/vnd.heroku+json; version=3"},
+            {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.heroku+json; version=3",
+            },
         )
         resources = []
         for item in payload if isinstance(payload, list) else []:
@@ -414,24 +464,34 @@ def run_inventory(live: bool = False, provider_id: str | None = None) -> dict[st
         and (not provider_id or provider["id"] == provider_id)
     ]
     with ThreadPoolExecutor(max_workers=min(5, max(1, len(providers)))) as executor:
-        results = list(executor.map(lambda provider: INVENTORIES[provider["id"]](provider, live), providers))
+        results = list(
+            executor.map(
+                lambda provider: INVENTORIES[provider["id"]](provider, live), providers
+            )
+        )
     if provider_id in READ_PROVIDERS:
         for provider in registry["providers"]:
             current_id = provider["id"]
-            if current_id in READ_PROVIDERS and (provider_id is None or current_id == provider_id):
+            if current_id in READ_PROVIDERS and (
+                provider_id is None or current_id == provider_id
+            ):
                 inventory = collect_provider(current_id, live=live)["inventory"]
-                results.append({
-                    **inventory, "id": current_id, "name": provider["name"],
-                    "resources": inventory.get("items", []),
-                    "summary": {
-                        "resources": inventory.get("returned", 0),
-                        "total_known": inventory.get("total_known", False),
-                    },
-                })
+                results.append(
+                    {
+                        **inventory,
+                        "id": current_id,
+                        "name": provider["name"],
+                        "resources": inventory.get("items", []),
+                        "summary": {
+                            "resources": inventory.get("returned", 0),
+                            "total_known": inventory.get("total_known", False),
+                        },
+                    }
+                )
     return {
         "schema_version": SCHEMA_VERSION,
         "mode": "live" if live else "offline",
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
         "read_only": True,
         "execution_enabled": False,
         "write_attempted": False,
@@ -440,12 +500,27 @@ def run_inventory(live: bool = False, provider_id: str | None = None) -> dict[st
             "providers": len(results),
             "healthy": sum(item["status"] == "healthy" for item in results),
             "configured": sum(item["status"] == "configured" for item in results),
-            "not_configured": sum(item["status"] == "not_configured" for item in results),
+            "not_configured": sum(
+                item["status"] == "not_configured" for item in results
+            ),
             "errors": sum(item["status"] == "error" for item in results),
-            "resources": sum(item.get("summary", {}).get("resources", 0) for item in results),
-            "partial_providers": sum(bool(item.get("partial") or item.get("summary", {}).get("partial")) for item in results),
-            "has_more": any(bool(item.get("has_more") or item.get("summary", {}).get("has_more")) for item in results),
-            "total_known": all(bool(item.get("summary", {}).get("total_known", not item.get("partial"))) for item in results),
+            "resources": sum(
+                item.get("summary", {}).get("resources", 0) for item in results
+            ),
+            "partial_providers": sum(
+                bool(item.get("partial") or item.get("summary", {}).get("partial"))
+                for item in results
+            ),
+            "has_more": any(
+                bool(item.get("has_more") or item.get("summary", {}).get("has_more"))
+                for item in results
+            ),
+            "total_known": all(
+                bool(
+                    item.get("summary", {}).get("total_known", not item.get("partial"))
+                )
+                for item in results
+            ),
         },
     }
 
@@ -453,20 +528,29 @@ def run_inventory(live: bool = False, provider_id: str | None = None) -> dict[st
 def main(argv: list[str] | None = None) -> int:
     configure_utf8_stdio()
     args = set(sys.argv[1:] if argv is None else argv)
-    provider_id = next((arg.split("=", 1)[1] for arg in args if arg.startswith("--provider=")), None)
+    provider_id = next(
+        (arg.split("=", 1)[1] for arg in args if arg.startswith("--provider=")), None
+    )
     if "--provider" in args:
         index = list(sys.argv[1:] if argv is None else argv).index("--provider")
         values = list(sys.argv[1:] if argv is None else argv)
         provider_id = values[index + 1] if index + 1 < len(values) else None
     if provider_id:
         from cloud_read_adapters import READ_PROVIDERS
+
         try:
             _get_provider(provider_id)
         except KeyError:
             raise SystemExit(f"Unknown provider: {provider_id}") from None
         if provider_id not in set(INVENTORIES) | READ_PROVIDERS:
             raise SystemExit(f"Inventory adapter is not implemented: {provider_id}")
-    print(json.dumps(run_inventory(live="--live" in args, provider_id=provider_id), ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            run_inventory(live="--live" in args, provider_id=provider_id),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
 
 

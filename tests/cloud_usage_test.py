@@ -30,11 +30,20 @@ class CloudUsageTest(unittest.TestCase):
                         "name": "Vercel",
                         "status": "healthy",
                         "dashboard_url": "https://vercel.com/dashboard",
-                        "resources": [{"id": "secret-resource-id", "name": "private-app"}],
+                        "resources": [
+                            {"id": "secret-resource-id", "name": "private-app"}
+                        ],
                         "summary": {"resources": 1, "returned": 1},
                     }
                 ],
-                "summary": {"providers": 1, "healthy": 1, "configured": 0, "not_configured": 0, "errors": 0, "resources": 1},
+                "summary": {
+                    "providers": 1,
+                    "healthy": 1,
+                    "configured": 0,
+                    "not_configured": 0,
+                    "errors": 0,
+                    "resources": 1,
+                },
             }
         )
         payload = cloud_usage.build_snapshot(
@@ -63,12 +72,23 @@ class CloudUsageTest(unittest.TestCase):
             return_value={
                 "schema_version": "solo-empire.paas-inventory.v1",
                 "providers": [],
-                "summary": {"providers": 0, "healthy": 0, "configured": 0, "not_configured": 0, "errors": 0, "resources": 0},
+                "summary": {
+                    "providers": 0,
+                    "healthy": 0,
+                    "configured": 0,
+                    "not_configured": 0,
+                    "errors": 0,
+                    "resources": 0,
+                },
             }
         )
         r2_runner = Mock(return_value=cloud_usage.empty_r2_result(live=True))
-        billing_runner = Mock(return_value=cloud_usage.empty_vercel_billing_result(live=True))
-        actions_runner = Mock(return_value=cloud_usage.empty_github_actions_result(live=True))
+        billing_runner = Mock(
+            return_value=cloud_usage.empty_vercel_billing_result(live=True)
+        )
+        actions_runner = Mock(
+            return_value=cloud_usage.empty_github_actions_result(live=True)
+        )
         payload = cloud_usage.build_snapshot(
             live=True,
             inventory_runner=runner,
@@ -134,7 +154,14 @@ class CloudUsageTest(unittest.TestCase):
             return_value={
                 "schema_version": "solo-empire.paas-inventory.v1",
                 "providers": [],
-                "summary": {"providers": 0, "healthy": 0, "configured": 0, "not_configured": 0, "errors": 0, "resources": 0},
+                "summary": {
+                    "providers": 0,
+                    "healthy": 0,
+                    "configured": 0,
+                    "not_configured": 0,
+                    "errors": 0,
+                    "resources": 0,
+                },
             }
         )
         r2_runner = Mock(
@@ -152,8 +179,20 @@ class CloudUsageTest(unittest.TestCase):
                 "storage_cost_estimate": {
                     "status": "estimate_only",
                     "estimated_usd": 0.06,
-                    "standard": {"payload_gb": 12.0, "free_gb_month": 10.0, "billable_gb_month": 2.0, "rate_usd_per_gb_month": 0.015, "estimated_usd": 0.03},
-                    "infrequent_access": {"payload_gb": 3.0, "free_gb_month": 0.0, "billable_gb_month": 3.0, "rate_usd_per_gb_month": 0.01, "estimated_usd": 0.03},
+                    "standard": {
+                        "payload_gb": 12.0,
+                        "free_gb_month": 10.0,
+                        "billable_gb_month": 2.0,
+                        "rate_usd_per_gb_month": 0.015,
+                        "estimated_usd": 0.03,
+                    },
+                    "infrequent_access": {
+                        "payload_gb": 3.0,
+                        "free_gb_month": 0.0,
+                        "billable_gb_month": 3.0,
+                        "rate_usd_per_gb_month": 0.01,
+                        "estimated_usd": 0.03,
+                    },
                 },
                 "storage_classes": {
                     "standard": {"published": {}, "uploaded": {}},
@@ -161,8 +200,12 @@ class CloudUsageTest(unittest.TestCase):
                 },
             }
         )
-        actions_runner = Mock(return_value=cloud_usage.empty_github_actions_result(live=True))
-        billing_runner = Mock(return_value=cloud_usage.empty_vercel_billing_result(live=True))
+        actions_runner = Mock(
+            return_value=cloud_usage.empty_github_actions_result(live=True)
+        )
+        billing_runner = Mock(
+            return_value=cloud_usage.empty_vercel_billing_result(live=True)
+        )
 
         payload = cloud_usage.build_snapshot(
             live=True,
@@ -179,7 +222,10 @@ class CloudUsageTest(unittest.TestCase):
         self.assertEqual(payload["usage"]["r2_object_count"], 7)
         self.assertEqual(payload["summary"]["r2_status"], "healthy")
         self.assertEqual(payload["usage"]["cloudflare_r2"]["object_count"], 7)
-        self.assertEqual(payload["usage"]["cloudflare_r2"]["storage_cost_estimate"]["estimated_usd"], 0.06)
+        self.assertEqual(
+            payload["usage"]["cloudflare_r2"]["storage_cost_estimate"]["estimated_usd"],
+            0.06,
+        )
         self.assertFalse(payload["usage"]["billing_api_connected"])
 
     def test_snapshot_includes_sanitized_vercel_billing_aggregates(self):
@@ -187,18 +233,30 @@ class CloudUsageTest(unittest.TestCase):
             return_value={
                 "schema_version": "solo-empire.paas-inventory.v1",
                 "providers": [],
-                "summary": {"providers": 0, "healthy": 0, "configured": 0, "not_configured": 0, "errors": 0, "resources": 0},
+                "summary": {
+                    "providers": 0,
+                    "healthy": 0,
+                    "configured": 0,
+                    "not_configured": 0,
+                    "errors": 0,
+                    "resources": 0,
+                },
             }
         )
         r2_runner = Mock(return_value=cloud_usage.empty_r2_result(live=True))
-        actions_runner = Mock(return_value=cloud_usage.empty_github_actions_result(live=True))
+        actions_runner = Mock(
+            return_value=cloud_usage.empty_github_actions_result(live=True)
+        )
         billing_runner = Mock(
             return_value={
                 "schema_version": "solo-empire.vercel-billing.v1",
                 "status": "healthy",
                 "credential_state": "verified_read_only",
                 "auth_source": "secret_manager",
-                "window": {"from": "2026-09-01T00:00:00.000Z", "to": "2026-10-01T00:00:00.000Z"},
+                "window": {
+                    "from": "2026-09-01T00:00:00.000Z",
+                    "to": "2026-10-01T00:00:00.000Z",
+                },
                 "charge_count": 4,
                 "billed_cost_by_currency": {"USD": 29.99},
                 "effective_cost_by_currency": {"USD": 28.5},
@@ -226,18 +284,32 @@ class CloudUsageTest(unittest.TestCase):
         self.assertTrue(payload["usage"]["billing_api_connected"])
         self.assertTrue(payload["usage"]["provider_usage_cost_connected"])
         self.assertTrue(payload["usage"]["vercel_billing_connected"])
-        self.assertEqual(payload["usage"]["vercel_billing"]["auth_source"], "secret_manager")
+        self.assertEqual(
+            payload["usage"]["vercel_billing"]["auth_source"], "secret_manager"
+        )
         self.assertEqual(payload["usage"]["vercel_charge_count"], 4)
-        self.assertEqual(payload["usage"]["vercel_billed_cost_by_currency"], {"USD": 29.99})
+        self.assertEqual(
+            payload["usage"]["vercel_billed_cost_by_currency"], {"USD": 29.99}
+        )
         self.assertEqual(payload["summary"]["vercel_billing_status"], "healthy")
-        self.assertEqual(payload["usage"]["vercel_billing"]["service_breakdown"][0]["service_name"], "Vercel Functions")
+        self.assertEqual(
+            payload["usage"]["vercel_billing"]["service_breakdown"][0]["service_name"],
+            "Vercel Functions",
+        )
 
     def test_snapshot_includes_sanitized_github_actions_usage_and_free_quota(self):
         runner = Mock(
             return_value={
                 "schema_version": "solo-empire.paas-inventory.v1",
                 "providers": [],
-                "summary": {"providers": 0, "healthy": 0, "configured": 0, "not_configured": 0, "errors": 0, "resources": 0},
+                "summary": {
+                    "providers": 0,
+                    "healthy": 0,
+                    "configured": 0,
+                    "not_configured": 0,
+                    "errors": 0,
+                    "resources": 0,
+                },
             }
         )
         actions_runner = Mock(
@@ -249,8 +321,17 @@ class CloudUsageTest(unittest.TestCase):
                 "owner_type": "user",
                 "owner_configured": False,
                 "plan": "free",
-                "free_allowance": {"minutes": 2000, "artifact_storage_gb": 0.5, "cache_storage_gb": 10},
-                "window": {"year": 2026, "month": 9, "from": "2026-09-01", "to": "2026-09-30"},
+                "free_allowance": {
+                    "minutes": 2000,
+                    "artifact_storage_gb": 0.5,
+                    "cache_storage_gb": 10,
+                },
+                "window": {
+                    "year": 2026,
+                    "month": 9,
+                    "from": "2026-09-01",
+                    "to": "2026-09-30",
+                },
                 "actions_minutes": 123,
                 "actions_artifact_storage_gb_hours": 4,
                 "actions_cache_storage_gb_hours": 1,
@@ -264,14 +345,22 @@ class CloudUsageTest(unittest.TestCase):
             live=True,
             inventory_runner=runner,
             r2_metrics_runner=Mock(return_value=cloud_usage.empty_r2_result(live=True)),
-            vercel_billing_runner=Mock(return_value=cloud_usage.empty_vercel_billing_result(live=True)),
+            vercel_billing_runner=Mock(
+                return_value=cloud_usage.empty_vercel_billing_result(live=True)
+            ),
             github_actions_runner=actions_runner,
         )
 
         self.assertTrue(payload["usage"]["github_actions_connected"])
-        self.assertEqual(payload["usage"]["github_actions"]["auth_source"], "cli_session")
+        self.assertEqual(
+            payload["usage"]["github_actions"]["auth_source"], "cli_session"
+        )
         self.assertEqual(payload["usage"]["github_actions_minutes"], 123)
-        actions_row = next(row for row in payload["usage"]["free_quota"]["services"] if row["id"] == "github-actions")
+        actions_row = next(
+            row
+            for row in payload["usage"]["free_quota"]["services"]
+            if row["id"] == "github-actions"
+        )
         self.assertEqual(actions_row["status"], "usage_available")
         self.assertEqual(actions_row["observed"]["remaining"], 1877)
         self.assertEqual(actions_row["quota"]["limit"], 2000)

@@ -34,15 +34,27 @@ class CloudApiTest(unittest.TestCase):
 
     def test_read_routes_delegate_to_sanitized_platform_adapters(self) -> None:
         usage = {"schema_version": "solo-empire.cloud-usage.v1", "read_only": True}
-        inventory = {"schema_version": "solo-empire.paas-inventory.v1", "read_only": True}
-        policy = {"schema_version": "solo-empire.paas-action-policy.v1", "providers": []}
+        inventory = {
+            "schema_version": "solo-empire.paas-inventory.v1",
+            "read_only": True,
+        }
+        policy = {
+            "schema_version": "solo-empire.paas-action-policy.v1",
+            "providers": [],
+        }
         with (
-            patch("server.cloud_usage.build_snapshot", return_value=usage) as usage_mock,
-            patch("server.paas_inventory.run_inventory", return_value=inventory) as inventory_mock,
+            patch(
+                "server.cloud_usage.build_snapshot", return_value=usage
+            ) as usage_mock,
+            patch(
+                "server.paas_inventory.run_inventory", return_value=inventory
+            ) as inventory_mock,
             patch("server.paas_action.load_policy", return_value=policy) as policy_mock,
         ):
             usage_response = self.api.handle("GET", "/api/v1/cloud/usage?live=false")
-            inventory_response = self.api.handle("GET", "/api/v1/paas/inventory?live=true&provider_id=render")
+            inventory_response = self.api.handle(
+                "GET", "/api/v1/paas/inventory?live=true&provider_id=render"
+            )
             policy_response = self.api.handle("GET", "/api/v1/paas/actions")
         self.assertEqual(usage_response.status, 200)
         self.assertEqual(inventory_response.status, 200)
@@ -55,8 +67,12 @@ class CloudApiTest(unittest.TestCase):
         policy_mock.assert_called_once_with()
 
     def test_configured_token_protects_read_routes(self) -> None:
-        api = CloudApi(token="unit-test-token", allowed_origins=("http://localhost:3200",))
-        with patch("server.cloud_usage.build_snapshot", return_value={"read_only": True}):
+        api = CloudApi(
+            token="unit-test-token", allowed_origins=("http://localhost:3200",)
+        )
+        with patch(
+            "server.cloud_usage.build_snapshot", return_value={"read_only": True}
+        ):
             denied = api.handle("GET", "/api/v1/cloud/usage")
             allowed = api.handle(
                 "GET",
@@ -80,9 +96,14 @@ class CloudApiTest(unittest.TestCase):
             body=b'{"operation":"status","decision_id":1}',
         )
         self.assertEqual(denied.status, 403)
-        self.assertEqual(denied.payload["error"]["code"], "local_owner_request_required")
+        self.assertEqual(
+            denied.payload["error"]["code"], "local_owner_request_required"
+        )
 
-        with patch("server.paas_execute.dispatch", return_value={"decision_id": 1, "status": "queued"}) as dispatch:
+        with patch(
+            "server.paas_execute.dispatch",
+            return_value={"decision_id": 1, "status": "queued"},
+        ) as dispatch:
             allowed = self.api.handle(
                 "POST",
                 "/api/v1/paas/commands",
@@ -102,7 +123,9 @@ class CloudApiTest(unittest.TestCase):
             remote_address="127.0.0.1",
         )
         self.assertEqual(forwarded.status, 403)
-        self.assertEqual(forwarded.payload["error"]["code"], "forwarded_request_rejected")
+        self.assertEqual(
+            forwarded.payload["error"]["code"], "forwarded_request_rejected"
+        )
 
         oversized = self.api.handle(
             "POST",
@@ -122,10 +145,15 @@ class CloudApiTest(unittest.TestCase):
             remote_address="127.0.0.1",
         )
         self.assertEqual(malformed_origin.status, 403)
-        self.assertEqual(malformed_origin.payload["error"]["code"], "local_owner_request_required")
+        self.assertEqual(
+            malformed_origin.payload["error"]["code"], "local_owner_request_required"
+        )
 
     def test_command_gate_errors_are_safe(self) -> None:
-        with patch("server.paas_execute.dispatch", side_effect=RuntimeError("provider token=never-return")):
+        with patch(
+            "server.paas_execute.dispatch",
+            side_effect=RuntimeError("provider token=never-return"),
+        ):
             response = self.api.handle(
                 "POST",
                 "/api/v1/paas/commands",

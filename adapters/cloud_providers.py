@@ -28,7 +28,9 @@ class CloudProviderRegistryError(ValueError):
 
 
 def _string_list(value: Any) -> bool:
-    return isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value)
+    return isinstance(value, list) and all(
+        isinstance(item, str) and item.strip() for item in value
+    )
 
 
 def _validate_env_names(value: Any, label: str, errors: list[str]) -> None:
@@ -65,7 +67,9 @@ def validate_registry(payload: Any) -> list[str]:
             continue
 
         provider_id = provider.get("id")
-        if not isinstance(provider_id, str) or not PROVIDER_ID_PATTERN.fullmatch(provider_id):
+        if not isinstance(provider_id, str) or not PROVIDER_ID_PATTERN.fullmatch(
+            provider_id
+        ):
             errors.append(f"{label}.id must be a lowercase kebab-case identifier")
         elif provider_id in seen_ids:
             errors.append(f"duplicate provider id: {provider_id}")
@@ -77,26 +81,38 @@ def validate_registry(payload: Any) -> list[str]:
                 errors.append(f"{label}.{field} must be a non-empty string")
 
         cli_binary = provider.get("cli_binary")
-        if cli_binary is not None and (not isinstance(cli_binary, str) or not cli_binary.strip()):
+        if cli_binary is not None and (
+            not isinstance(cli_binary, str) or not cli_binary.strip()
+        ):
             errors.append(f"{label}.cli_binary must be a non-empty string or null")
         version_command = provider.get("cli_version_command")
         version_timeout = provider.get("cli_version_timeout_seconds", 8)
-        if isinstance(version_timeout, bool) or not isinstance(version_timeout, int) or not 1 <= version_timeout <= 60:
-            errors.append(f"{label}.cli_version_timeout_seconds must be an integer from 1 to 60")
+        if (
+            isinstance(version_timeout, bool)
+            or not isinstance(version_timeout, int)
+            or not 1 <= version_timeout <= 60
+        ):
+            errors.append(
+                f"{label}.cli_version_timeout_seconds must be an integer from 1 to 60"
+            )
         if cli_binary is not None and (
             not isinstance(version_command, list)
             or len(version_command) != 2
             or version_command[0] != cli_binary
             or version_command[1] not in {"--version", "version"}
         ):
-            errors.append(f"{label}.cli_version_command must be a fixed version-only command")
+            errors.append(
+                f"{label}.cli_version_command must be a fixed version-only command"
+            )
         cli_install = provider.get("cli_install")
         if cli_binary is not None and (
             not isinstance(cli_install, dict)
             or not isinstance(cli_install.get("url"), str)
             or not cli_install["url"].startswith("https://")
         ):
-            errors.append(f"{label}.cli_install must provide an HTTPS installation guide")
+            errors.append(
+                f"{label}.cli_install must provide an HTTPS installation guide"
+            )
 
         auth = provider.get("auth")
         if not isinstance(auth, dict):
@@ -110,8 +126,14 @@ def validate_registry(payload: Any) -> list[str]:
                 errors.append(f"{label}.auth.secret_manager must be a mapping or null")
             else:
                 path = secret_manager.get("path")
-                if not isinstance(path, str) or not path.startswith("/") or ".." in PurePosixPath(path).parts:
-                    errors.append(f"{label}.auth.secret_manager.path must be an absolute secret folder path")
+                if (
+                    not isinstance(path, str)
+                    or not path.startswith("/")
+                    or ".." in PurePosixPath(path).parts
+                ):
+                    errors.append(
+                        f"{label}.auth.secret_manager.path must be an absolute secret folder path"
+                    )
                 _validate_env_names(
                     secret_manager.get("names"),
                     f"{label}.auth.secret_manager.names",
@@ -125,19 +147,29 @@ def validate_registry(payload: Any) -> list[str]:
             else:
                 check_command = cli_session.get("check_command")
                 if not _string_list(check_command):
-                    errors.append(f"{label}.auth.cli_session.check_command must be a non-empty string list")
+                    errors.append(
+                        f"{label}.auth.cli_session.check_command must be a non-empty string list"
+                    )
                 elif not cli_binary or check_command[0] != cli_binary:
-                    errors.append(f"{label}.auth.cli_session.check_command must start with cli_binary")
+                    errors.append(
+                        f"{label}.auth.cli_session.check_command must start with cli_binary"
+                    )
                 token_command = cli_session.get("token_command")
                 if token_command is not None:
                     if not _string_list(token_command):
-                        errors.append(f"{label}.auth.cli_session.token_command must be a string list or null")
+                        errors.append(
+                            f"{label}.auth.cli_session.token_command must be a string list or null"
+                        )
                     elif not cli_binary or token_command[0] != cli_binary:
-                        errors.append(f"{label}.auth.cli_session.token_command must start with cli_binary")
+                        errors.append(
+                            f"{label}.auth.cli_session.token_command must start with cli_binary"
+                        )
 
         capabilities = provider.get("capabilities")
         if not isinstance(capabilities, dict) or set(capabilities) != CAPABILITIES:
-            errors.append(f"{label}.capabilities must define health, inventory, usage, and billing")
+            errors.append(
+                f"{label}.capabilities must define health, inventory, usage, and billing"
+            )
         elif any(not isinstance(capabilities[name], bool) for name in CAPABILITIES):
             errors.append(f"{label}.capabilities values must be booleans")
 
@@ -159,11 +191,15 @@ def validate_registry(payload: Any) -> list[str]:
 
         optional_env = provider.get("optional_env", [])
         if not _string_list(optional_env):
-            errors.append(f"{label}.optional_env must be a list of environment variable names")
+            errors.append(
+                f"{label}.optional_env must be a list of environment variable names"
+            )
         else:
             for name in optional_env:
                 if not ENV_NAME_PATTERN.fullmatch(name):
-                    errors.append(f"{label}.optional_env contains an invalid environment variable name")
+                    errors.append(
+                        f"{label}.optional_env contains an invalid environment variable name"
+                    )
 
         project_usage = provider.get("project_usage")
         if not isinstance(project_usage, list):
@@ -182,12 +218,16 @@ def validate_registry(payload: Any) -> list[str]:
                 errors.append(f"{use_label}.status is invalid")
             evidence = use.get("evidence")
             if not _string_list(evidence):
-                errors.append(f"{use_label}.evidence must be a non-empty list of repository paths")
+                errors.append(
+                    f"{use_label}.evidence must be a non-empty list of repository paths"
+                )
             else:
                 for path in evidence:
                     pure_path = PurePosixPath(path)
                     if pure_path.is_absolute() or ".." in pure_path.parts:
-                        errors.append(f"{use_label}.evidence contains an unsafe repository path")
+                        errors.append(
+                            f"{use_label}.evidence contains an unsafe repository path"
+                        )
             note = use.get("note")
             if note is not None and not isinstance(note, str):
                 errors.append(f"{use_label}.note must be a string or null")
@@ -229,7 +269,9 @@ def secret_names(provider: dict[str, Any]) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="validate the cloud provider registry")
+    parser.add_argument(
+        "--check", action="store_true", help="validate the cloud provider registry"
+    )
     args = parser.parse_args(argv)
     if not args.check:
         parser.error("use --check to validate the registry")
@@ -238,7 +280,9 @@ def main(argv: list[str] | None = None) -> int:
     except CloudProviderRegistryError as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
-    print(f"OK: validated {len(registry['providers'])} cloud providers; writes use paas:action:propose.")
+    print(
+        f"OK: validated {len(registry['providers'])} cloud providers; writes use paas:action:propose."
+    )
     return 0
 
 

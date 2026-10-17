@@ -19,15 +19,19 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 from platform_output import configure_utf8_stdio  # noqa: E402
-from cloud_providers import get_provider as _get_provider, load_registry as _load_registry  # noqa: E402
+from cloud_providers import (
+    get_provider as _get_provider,
+    load_registry as _load_registry,
+)  # noqa: E402
 from auth_resolver import AuthResolution, resolve_provider_auth  # noqa: E402
 from _env import get_env  # noqa: E402
 
@@ -65,7 +69,9 @@ def _get_json(url: str, headers: dict[str, str] | None = None) -> Any:
         return json.loads(response.read().decode("utf-8"))
 
 
-def _post_json(url: str, body: dict[str, Any], headers: dict[str, str] | None = None) -> Any:
+def _post_json(
+    url: str, body: dict[str, Any], headers: dict[str, str] | None = None
+) -> Any:
     request = urllib.request.Request(
         url,
         data=json.dumps(body).encode("utf-8"),
@@ -136,7 +142,11 @@ def _check_vercel(
     token = auth.credential
     try:
         query = urllib.parse.urlencode({"limit": "1"})
-        team_id = get_env("VERCEL_TEAM_ID") if "VERCEL_TEAM_ID" in provider.get("optional_env", []) else None
+        team_id = (
+            get_env("VERCEL_TEAM_ID")
+            if "VERCEL_TEAM_ID" in provider.get("optional_env", [])
+            else None
+        )
         if team_id:
             query += "&" + urllib.parse.urlencode({"teamId": team_id})
         payload = _get_json(
@@ -151,9 +161,13 @@ def _check_vercel(
     except Exception as exc:
         result["status"] = "error"
         error_class = _safe_error(exc)
-        result["error_class"] = "vercel_access_forbidden" if error_class == "http_403" else error_class
+        result["error_class"] = (
+            "vercel_access_forbidden" if error_class == "http_403" else error_class
+        )
         if error_class == "http_403":
-            result["detail"] = "Vercel denied the token; verify REST API token validity and team access"
+            result["detail"] = (
+                "Vercel denied the token; verify REST API token validity and team access"
+            )
         return result
 
 
@@ -201,7 +215,11 @@ def _check_railway(
             {"query": "query { me { id name } }"},
             {"Authorization": f"Bearer {token}"},
         )
-        if not isinstance(payload, dict) or payload.get("errors") or not isinstance(payload.get("data", {}).get("me"), dict):
+        if (
+            not isinstance(payload, dict)
+            or payload.get("errors")
+            or not isinstance(payload.get("data", {}).get("me"), dict)
+        ):
             result["status"] = "error"
             result["error_class"] = "railway_graphql_error"
             return result
@@ -223,9 +241,18 @@ def _check_fly_io(
     if auth is None or not auth.credential:
         return _configured(result)
     token = auth.credential
-    org_slug = get_env("FLY_ORG_SLUG") if "FLY_ORG_SLUG" in provider.get("optional_env", []) else None
+    org_slug = (
+        get_env("FLY_ORG_SLUG")
+        if "FLY_ORG_SLUG" in provider.get("optional_env", [])
+        else None
+    )
     if not org_slug:
-        return _not_configured(result, ["FLY_ORG_SLUG"] if "FLY_ORG_SLUG" in provider.get("optional_env", []) else [])
+        return _not_configured(
+            result,
+            ["FLY_ORG_SLUG"]
+            if "FLY_ORG_SLUG" in provider.get("optional_env", [])
+            else [],
+        )
     try:
         query = urllib.parse.urlencode({"org_slug": org_slug})
         payload = _get_json(
@@ -271,7 +298,9 @@ def _check_heroku(
 
 CHECKERS: dict[
     str,
-    Callable[[dict[str, Any], dict[str, Any], bool, AuthResolution | None], dict[str, Any]],
+    Callable[
+        [dict[str, Any], dict[str, Any], bool, AuthResolution | None], dict[str, Any]
+    ],
 ] = {
     "vercel": _check_vercel,
     "render": _check_render,
@@ -311,15 +340,23 @@ def check_paas_provider(provider_id: str, live: bool = False) -> dict[str, Any]:
 
 def run_health_check(live: bool = False) -> dict[str, Any]:
     registry = _load_registry()
-    provider_specs = [provider for provider in registry["providers"] if provider.get("paas") is True]
+    provider_specs = [
+        provider for provider in registry["providers"] if provider.get("paas") is True
+    ]
     # Credential lookups may consult a remote secret manager. Keep the
     # dashboard responsive by checking independent providers concurrently.
-    with ThreadPoolExecutor(max_workers=min(5, max(1, len(provider_specs)))) as executor:
-        providers = list(executor.map(lambda provider: check_provider(provider, live=live), provider_specs))
+    with ThreadPoolExecutor(
+        max_workers=min(5, max(1, len(provider_specs)))
+    ) as executor:
+        providers = list(
+            executor.map(
+                lambda provider: check_provider(provider, live=live), provider_specs
+            )
+        )
     return {
         "version": registry["version"],
         "mode": "live" if live else "offline",
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
         "write_actions_enabled": bool(registry.get("write_actions_enabled", False)),
         "write_actions_reason": registry.get("write_actions_reason"),
         "providers": providers,
@@ -327,7 +364,9 @@ def run_health_check(live: bool = False) -> dict[str, Any]:
             "total": len(providers),
             "healthy": sum(item["status"] == "healthy" for item in providers),
             "configured": sum(item["status"] == "configured" for item in providers),
-            "not_configured": sum(item["status"] == "not_configured" for item in providers),
+            "not_configured": sum(
+                item["status"] == "not_configured" for item in providers
+            ),
             "errors": sum(item["status"] == "error" for item in providers),
         },
     }

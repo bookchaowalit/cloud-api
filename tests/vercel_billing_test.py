@@ -22,8 +22,12 @@ SPEC.loader.exec_module(vercel_billing)
 
 class VercelBillingTest(unittest.TestCase):
     def test_offline_mode_does_not_read_secrets_or_call_provider(self):
-        secret_getter = Mock(side_effect=AssertionError("offline must not resolve secrets"))
-        env_getter = Mock(side_effect=AssertionError("offline must not read provider scope"))
+        secret_getter = Mock(
+            side_effect=AssertionError("offline must not resolve secrets")
+        )
+        env_getter = Mock(
+            side_effect=AssertionError("offline must not read provider scope")
+        )
         fetcher = Mock(side_effect=AssertionError("offline must not call provider"))
 
         payload = vercel_billing.run_billing(
@@ -93,12 +97,21 @@ class VercelBillingTest(unittest.TestCase):
         self.assertTrue(payload["team_scope_configured"])
         self.assertEqual(payload["billing_access_scope"], "pro_or_enterprise_team")
         self.assertEqual(payload["next_action"], "none")
-        self.assertEqual(payload["window"], {"from": "2026-09-01T00:00:00.000Z", "to": "2026-10-01T00:00:00.000Z"})
+        self.assertEqual(
+            payload["window"],
+            {"from": "2026-09-01T00:00:00.000Z", "to": "2026-10-01T00:00:00.000Z"},
+        )
         self.assertEqual(payload["charge_count"], 3)
         self.assertEqual(payload["billed_cost_by_currency"], {"EUR": 4.0, "USD": 11.25})
-        self.assertEqual(payload["effective_cost_by_currency"], {"EUR": 4.0, "USD": 10.5})
+        self.assertEqual(
+            payload["effective_cost_by_currency"], {"EUR": 4.0, "USD": 10.5}
+        )
         self.assertEqual(len(payload["service_breakdown"]), 2)
-        functions = next(row for row in payload["service_breakdown"] if row["service_name"] == "Vercel Functions")
+        functions = next(
+            row
+            for row in payload["service_breakdown"]
+            if row["service_name"] == "Vercel Functions"
+        )
         self.assertEqual(functions["charge_count"], 2)
         self.assertEqual(functions["billed_cost"], 11.25)
         self.assertEqual(functions["effective_cost"], 10.5)
@@ -112,7 +125,9 @@ class VercelBillingTest(unittest.TestCase):
         self.assertEqual(query["slug"], ["solo-team"])
         self.assertEqual(query["from"], ["2026-09-01T00:00:00.000Z"])
         self.assertEqual(query["to"], ["2026-10-01T00:00:00.000Z"])
-        self.assertEqual(called_headers, {"Authorization": "Bearer vercel-secret-token"})
+        self.assertEqual(
+            called_headers, {"Authorization": "Bearer vercel-secret-token"}
+        )
 
         serialized = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("vercel-secret-token", serialized)
@@ -122,8 +137,14 @@ class VercelBillingTest(unittest.TestCase):
         self.assertNotIn("BillingAccountId", serialized)
 
     def test_cli_session_without_api_token_does_not_call_provider(self):
-        auth = vercel_billing.AuthResolution(status="configured", auth_source="cli_session")
-        fetcher = Mock(side_effect=AssertionError("billing API must not be called without an API token"))
+        auth = vercel_billing.AuthResolution(
+            status="configured", auth_source="cli_session"
+        )
+        fetcher = Mock(
+            side_effect=AssertionError(
+                "billing API must not be called without an API token"
+            )
+        )
         with patch.object(vercel_billing, "resolve_provider_auth", return_value=auth):
             payload = vercel_billing.run_billing(
                 live=True,
@@ -156,7 +177,9 @@ class VercelBillingTest(unittest.TestCase):
         SecretResolutionError = type("SecretResolutionError", (RuntimeError,), {})
         payload = vercel_billing.run_billing(
             live=True,
-            secret_getter=Mock(side_effect=SecretResolutionError("private provider details")),
+            secret_getter=Mock(
+                side_effect=SecretResolutionError("private provider details")
+            ),
             env_getter=Mock(return_value=None),
             fetcher=Mock(side_effect=AssertionError("provider must not be called")),
         )
@@ -172,7 +195,9 @@ class VercelBillingTest(unittest.TestCase):
             live=True,
             secret_getter=Mock(return_value="token"),
             env_getter=Mock(return_value=None),
-            fetcher=Mock(return_value=['{"BillingCurrency":"USD","BilledCost":1}', "not-json"]),
+            fetcher=Mock(
+                return_value=['{"BillingCurrency":"USD","BilledCost":1}', "not-json"]
+            ),
         )
 
         self.assertEqual(payload["status"], "error")
@@ -182,7 +207,10 @@ class VercelBillingTest(unittest.TestCase):
 
     def test_invalid_scope_is_rejected_before_provider_call(self):
         fetcher = Mock()
-        env_values = {"VERCEL_TEAM_ID": "team/with-invalid-slash", "VERCEL_TEAM_SLUG": None}
+        env_values = {
+            "VERCEL_TEAM_ID": "team/with-invalid-slash",
+            "VERCEL_TEAM_SLUG": None,
+        }
         payload = vercel_billing.run_billing(
             live=True,
             secret_getter=Mock(return_value="token"),

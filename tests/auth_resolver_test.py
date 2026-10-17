@@ -154,7 +154,9 @@ class AuthResolverTest(unittest.TestCase):
         runner = Mock()
         auth = resolve_provider_auth(
             get_provider("github"),
-            secret_getter=Mock(side_effect=SecretResolutionError("private provider detail")),
+            secret_getter=Mock(
+                side_effect=SecretResolutionError("private provider detail")
+            ),
             process_runner=runner,
             which=lambda _binary: "C:\\Tools\\gh.exe",
         )

@@ -28,10 +28,14 @@ class FreeQuotaTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertGreater(projection["summary"]["total"], 0)
-        self.assertNotIn("learning", {item["category"] for item in projection["services"]})
+        self.assertNotIn(
+            "learning", {item["category"] for item in projection["services"]}
+        )
         self.assertEqual(projection["summary"]["total"], len(projection["services"]))
         self.assertEqual(projection["summary"]["usage_available"], 0)
-        self.assertEqual(projection["summary"]["reference_only"], projection["summary"]["total"])
+        self.assertEqual(
+            projection["summary"]["reference_only"], projection["summary"]["total"]
+        )
         self.assertRegex(projection["catalog_updated"], r"^\d{4}-\d{2}-\d{2}$")
 
     def test_r2_reports_observed_usage_and_remaining_free_quota(self):
@@ -45,7 +49,9 @@ class FreeQuotaTest(unittest.TestCase):
         )
 
         self.assertEqual(errors, [])
-        r2 = next(item for item in projection["services"] if item["id"] == "cloudflare-r2")
+        r2 = next(
+            item for item in projection["services"] if item["id"] == "cloudflare-r2"
+        )
         self.assertEqual(r2["status"], "usage_available")
         self.assertEqual(r2["coverage"], "partial")
         self.assertEqual(r2["observed"]["used"], 3.5)
@@ -60,7 +66,9 @@ class FreeQuotaTest(unittest.TestCase):
         )
 
         self.assertEqual(errors, [])
-        r2 = next(item for item in projection["services"] if item["id"] == "cloudflare-r2")
+        r2 = next(
+            item for item in projection["services"] if item["id"] == "cloudflare-r2"
+        )
         self.assertEqual(r2["status"], "unavailable")
         self.assertIsNone(r2["observed"])
         self.assertEqual(r2["status_reason"], "http_404")
@@ -78,7 +86,9 @@ class FreeQuotaTest(unittest.TestCase):
         )
 
         self.assertEqual(errors, [])
-        actions = next(item for item in projection["services"] if item["id"] == "github-actions")
+        actions = next(
+            item for item in projection["services"] if item["id"] == "github-actions"
+        )
         self.assertEqual(actions["status"], "reference_only")
         self.assertEqual(actions["coverage"], "partial")
         self.assertEqual(actions["status_reason"], "plan_allowance_unknown")

@@ -9,7 +9,7 @@ import sqlite3
 import tempfile
 import unittest
 from argparse import Namespace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from unittest.mock import patch
 
@@ -53,14 +53,18 @@ def create_decision_db(path: Path):
     """A temporary SQLite file with the legacy decision tables for the store test double."""
     conn = sqlite3.connect(path)
     apply_legacy_decision_tables(conn)
-    SqliteDecisionStore(conn)  # adds the version column the double uses for optimistic concurrency
+    SqliteDecisionStore(
+        conn
+    )  # adds the version column the double uses for optimistic concurrency
     conn.commit()
     conn.close()
 
 
 def decisions_at(path: Path):
     """A drop-in for ``open_decision_store`` over ``path`` (a fresh connection per call, like the API)."""
-    return lambda *_args, **_kwargs: SqliteDecisionStore(sqlite3.connect(path, timeout=10))
+    return lambda *_args, **_kwargs: SqliteDecisionStore(
+        sqlite3.connect(path, timeout=10)
+    )
 
 
 class PaaSActionPolicyTest(unittest.TestCase):
@@ -74,13 +78,28 @@ class PaaSActionPolicyTest(unittest.TestCase):
         self.assertEqual(paas_action.approval_max_age_seconds(self.policy), 3600)
         for provider in self.policy["providers"]:
             if provider["id"] != "render":
-                self.assertNotIn("render-v1", [spec["adapter"] for spec in provider["actions"].values()])
+                self.assertNotIn(
+                    "render-v1",
+                    [spec["adapter"] for spec in provider["actions"].values()],
+                )
         providers = {provider["id"]: provider for provider in self.policy["providers"]}
-        self.assertEqual(set(providers), {"vercel", "render", "railway", "fly-io", "heroku"})
-        self.assertEqual(set(providers["render"]["actions"]), {"deploy", "restart", "rollback", "set-auto-deploy"})
-        self.assertTrue(all(set(provider["actions"]) == {"deploy", "restart", "rollback"}
-                            for provider in providers.values() if provider["id"] != "render"))
-        self.assertEqual(providers["vercel"]["actions"]["restart"]["support"], "unsupported")
+        self.assertEqual(
+            set(providers), {"vercel", "render", "railway", "fly-io", "heroku"}
+        )
+        self.assertEqual(
+            set(providers["render"]["actions"]),
+            {"deploy", "restart", "rollback", "set-auto-deploy"},
+        )
+        self.assertTrue(
+            all(
+                set(provider["actions"]) == {"deploy", "restart", "rollback"}
+                for provider in providers.values()
+                if provider["id"] != "render"
+            )
+        )
+        self.assertEqual(
+            providers["vercel"]["actions"]["restart"]["support"], "unsupported"
+        )
         self.assertEqual(providers["fly-io"]["actions"]["deploy"]["support"], "manual")
 
     def test_proposal_never_attempts_external_write(self):
@@ -94,7 +113,12 @@ class PaaSActionPolicyTest(unittest.TestCase):
 
     def test_set_auto_deploy_is_bounded_and_does_not_require_health_path(self):
         proposal = paas_action.build_proposal(
-            proposal_args(action="set-auto-deploy", rollback_target=None, health_path=None, auto_deploy="no"),
+            proposal_args(
+                action="set-auto-deploy",
+                rollback_target=None,
+                health_path=None,
+                auto_deploy="no",
+            ),
             self.policy,
         )
         self.assertIn("approval-id-required", proposal["blockers"])
@@ -105,7 +129,12 @@ class PaaSActionPolicyTest(unittest.TestCase):
     def test_set_auto_deploy_rejects_other_states(self):
         with self.assertRaisesRegex(ValueError, "auto_deploy must be yes or no"):
             paas_action.build_proposal(
-                proposal_args(action="set-auto-deploy", rollback_target=None, health_path=None, auto_deploy="maybe"),
+                proposal_args(
+                    action="set-auto-deploy",
+                    rollback_target=None,
+                    health_path=None,
+                    auto_deploy="maybe",
+                ),
                 self.policy,
             )
 
@@ -113,12 +142,16 @@ class PaaSActionPolicyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "decisions.db"
             create_decision_db(db_path)
-            with patch.object(paas_action, "open_decision_store", decisions_at(db_path)):
+            with patch.object(
+                paas_action, "open_decision_store", decisions_at(db_path)
+            ):
                 proposal = paas_action.build_proposal(proposal_args(), self.policy)
                 registration = paas_action.register_proposal(proposal)
                 self.assertTrue(registration["created"])
 
-                pending = paas_action.check_approval(registration["decision_id"], proposal["proposal_id"])
+                pending = paas_action.check_approval(
+                    registration["decision_id"], proposal["proposal_id"]
+                )
                 self.assertFalse(pending["valid"])
 
                 conn = sqlite3.connect(db_path)
@@ -129,19 +162,25 @@ class PaaSActionPolicyTest(unittest.TestCase):
                 conn.commit()
                 conn.close()
 
-                approved = paas_action.check_approval(registration["decision_id"], proposal["proposal_id"])
+                approved = paas_action.check_approval(
+                    registration["decision_id"], proposal["proposal_id"]
+                )
                 self.assertTrue(approved["valid"])
-                mismatched = paas_action.check_approval(registration["decision_id"], "paas-proposal:other")
+                mismatched = paas_action.check_approval(
+                    registration["decision_id"], "paas-proposal:other"
+                )
                 self.assertFalse(mismatched["valid"])
 
     def test_expired_approval_requires_fresh_review(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "decisions.db"
             create_decision_db(db_path)
-            with patch.object(paas_action, "open_decision_store", decisions_at(db_path)):
+            with patch.object(
+                paas_action, "open_decision_store", decisions_at(db_path)
+            ):
                 proposal = paas_action.build_proposal(proposal_args(), self.policy)
                 registration = paas_action.register_proposal(proposal)
-                expired_at = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+                expired_at = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
                 conn = sqlite3.connect(db_path)
                 conn.execute(
                     """
@@ -155,7 +194,9 @@ class PaaSActionPolicyTest(unittest.TestCase):
                 conn.commit()
                 conn.close()
 
-                approval = paas_action.check_approval(registration["decision_id"], proposal["proposal_id"])
+                approval = paas_action.check_approval(
+                    registration["decision_id"], proposal["proposal_id"]
+                )
                 self.assertFalse(approval["valid"])
                 self.assertEqual(approval["error"], "approval-expired")
                 self.assertFalse(approval["checks"]["approval_fresh"])

@@ -13,7 +13,7 @@ import hashlib
 import json
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +31,9 @@ from task_store import ClientConfigError  # noqa: E402
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,255}$")
 SAFE_ENV = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,63}$")
 SAFE_OPERATION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,79}$")
-SECRET_WORD = re.compile(r"(token|secret|password|passwd|api[_-]?key|bearer|private[_-]?key)", re.IGNORECASE)
+SECRET_WORD = re.compile(
+    r"(token|secret|password|passwd|api[_-]?key|bearer|private[_-]?key)", re.IGNORECASE
+)
 SUPPORT_STATES = {"supported", "manual", "unsupported"}
 DEFAULT_APPROVAL_MAX_AGE_SECONDS = 60 * 60
 MAX_APPROVAL_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
@@ -89,7 +91,9 @@ def safe_identifier(value: str | None, field: str, pattern: re.Pattern[str]) -> 
 
 
 def canonical_request(request: dict[str, Any]) -> str:
-    return json.dumps(request, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        request, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
 
 
 def proposal_fingerprint(request: dict[str, Any]) -> str:
@@ -113,7 +117,9 @@ def execution_lock_key(request: dict[str, Any]) -> str:
     return f"paas-resource:{digest[:32]}"
 
 
-def find_action(policy: dict[str, Any], provider_id: str, action: str) -> tuple[dict[str, Any], dict[str, Any]]:
+def find_action(
+    policy: dict[str, Any], provider_id: str, action: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
     provider = provider_map(policy).get(provider_id)
     if provider is None:
         raise ValueError(f"Unknown PaaS provider: {provider_id}")
@@ -134,7 +140,7 @@ def _parse_db_timestamp(value: Any) -> datetime | None:
     if not text:
         return None
     try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))  # noqa: FURB162 - keep the explicit "Z" handling; lint pass is behaviour-neutral
     except ValueError:
         try:
             parsed = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
@@ -144,8 +150,8 @@ def _parse_db_timestamp(value: Any) -> datetime | None:
     # explicit UTC offset, but treating legacy naive values as UTC keeps the
     # expiry check deterministic and avoids local-time ambiguity.
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _row_value(row: Any, key: str) -> Any:
@@ -166,7 +172,9 @@ def assess_approval_row(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Assess status, binding, and freshness without opening another DB connection."""
-    max_age_seconds = approval_max_age_seconds({"approval": {"max_age_seconds": max_age_seconds}})
+    max_age_seconds = approval_max_age_seconds(
+        {"approval": {"max_age_seconds": max_age_seconds}}
+    )
     checks = {
         "domain": _row_value(row, "domain") == "paas",
         "status": _row_value(row, "status") == "approved",
@@ -178,15 +186,17 @@ def assess_approval_row(
     }
     timestamp_source = "decided_at" if _row_value(row, "decided_at") else "updated_at"
     approval_at = _parse_db_timestamp(_row_value(row, timestamp_source))
-    current_time = now or datetime.now(timezone.utc)
+    current_time = now or datetime.now(UTC)
     if current_time.tzinfo is None:
-        current_time = current_time.replace(tzinfo=timezone.utc)
-    current_time = current_time.astimezone(timezone.utc)
+        current_time = current_time.replace(tzinfo=UTC)
+    current_time = current_time.astimezone(UTC)
     age_seconds = (current_time - approval_at).total_seconds() if approval_at else None
     checks["approval_timestamp_present"] = approval_at is not None
     checks["approval_timestamp_valid"] = approval_at is not None
     checks["approval_not_future"] = age_seconds is not None and age_seconds >= 0
-    checks["approval_fresh"] = age_seconds is not None and 0 <= age_seconds <= max_age_seconds
+    checks["approval_fresh"] = (
+        age_seconds is not None and 0 <= age_seconds <= max_age_seconds
+    )
 
     valid = all(checks.values())
     result: dict[str, Any] = {
@@ -198,11 +208,21 @@ def assess_approval_row(
     }
     if approval_at is not None:
         result["approval_timestamp"] = approval_at.isoformat()
-        result["approval_expires_at"] = (approval_at + timedelta(seconds=max_age_seconds)).isoformat()
+        result["approval_expires_at"] = (
+            approval_at + timedelta(seconds=max_age_seconds)
+        ).isoformat()
         result["approval_age_seconds"] = round(age_seconds or 0, 3)
-    if all(checks[field] for field in checks if field not in {
-        "approval_timestamp_present", "approval_timestamp_valid", "approval_not_future", "approval_fresh"
-    }):
+    if all(
+        checks[field]
+        for field in checks
+        if field
+        not in {
+            "approval_timestamp_present",
+            "approval_timestamp_valid",
+            "approval_not_future",
+            "approval_fresh",
+        }
+    ):
         if approval_at is None:
             result["error"] = "approval-timestamp-unavailable"
         elif age_seconds is not None and age_seconds < 0:
@@ -221,21 +241,43 @@ def check_approval(
     try:
         row = open_decision_store("paas-operator").get(approval_id)
     except (ClientConfigError, DecisionStoreError, OSError, RuntimeError):
-        return {"id": approval_id, "status": "unavailable", "valid": False, "error": "approval-store-unavailable"}
+        return {
+            "id": approval_id,
+            "status": "unavailable",
+            "valid": False,
+            "error": "approval-store-unavailable",
+        }
     if row is None:
-        return {"id": approval_id, "status": "not_found", "valid": False, "error": "approval-not-found"}
+        return {
+            "id": approval_id,
+            "status": "not_found",
+            "valid": False,
+            "error": "approval-not-found",
+        }
     row = {**row, "approval_required": int(bool(row["approval_required"]))}
-    return assess_approval_row(row, proposal_id, approval_id=approval_id, max_age_seconds=max_age_seconds)
+    return assess_approval_row(
+        row, proposal_id, approval_id=approval_id, max_age_seconds=max_age_seconds
+    )
 
 
 def build_proposal(args: argparse.Namespace, policy: dict[str, Any]) -> dict[str, Any]:
     provider_id = safe_identifier(args.provider, "provider", SAFE_ID)
     action = safe_identifier(args.action, "action", SAFE_ID).lower()
-    resource_type = safe_identifier(args.resource_type, "resource_type", SAFE_ID).lower()
+    resource_type = safe_identifier(
+        args.resource_type, "resource_type", SAFE_ID
+    ).lower()
     resource_id = safe_identifier(args.resource_id, "resource_id", SAFE_ID)
     environment = safe_identifier(args.environment, "environment", SAFE_ENV).lower()
-    target_revision = safe_identifier(args.target_revision, "target_revision", SAFE_ID) if args.target_revision else None
-    rollback_target = safe_identifier(args.rollback_target, "rollback_target", SAFE_ID) if args.rollback_target else None
+    target_revision = (
+        safe_identifier(args.target_revision, "target_revision", SAFE_ID)
+        if args.target_revision
+        else None
+    )
+    rollback_target = (
+        safe_identifier(args.rollback_target, "rollback_target", SAFE_ID)
+        if args.rollback_target
+        else None
+    )
     auto_deploy = clean_text(getattr(args, "auto_deploy", None), 3)
     if auto_deploy is not None:
         auto_deploy = auto_deploy.lower()
@@ -245,7 +287,9 @@ def build_proposal(args: argparse.Namespace, policy: dict[str, Any]) -> dict[str
     raw_operation_id = clean_text(getattr(args, "operation_id", None), 80)
     operation_id = None
     if raw_operation_id:
-        if not SAFE_OPERATION_ID.fullmatch(raw_operation_id) or SECRET_WORD.search(raw_operation_id):
+        if not SAFE_OPERATION_ID.fullmatch(raw_operation_id) or SECRET_WORD.search(
+            raw_operation_id
+        ):
             raise ValueError("operation_id must be a bounded non-secret identifier")
         operation_id = raw_operation_id
 
@@ -272,7 +316,9 @@ def build_proposal(args: argparse.Namespace, policy: dict[str, Any]) -> dict[str
         if value:
             if field == "health_path":
                 if not re.fullmatch(r"/[A-Za-z0-9_/-]{0,120}", value) or "//" in value:
-                    raise ValueError("health_path must be an absolute path without a query")
+                    raise ValueError(
+                        "health_path must be an absolute path without a query"
+                    )
                 request[field] = value
             else:
                 request[field] = safe_identifier(value, field, SAFE_ID)
@@ -314,7 +360,9 @@ def build_proposal(args: argparse.Namespace, policy: dict[str, Any]) -> dict[str
         if not approval.get("valid"):
             blockers.append(approval.get("error", "approval-invalid"))
 
-    if not policy.get("execution_enabled") or not policy.get("mutating_requests_enabled"):
+    if not policy.get("execution_enabled") or not policy.get(
+        "mutating_requests_enabled"
+    ):
         blockers.append("write-actions-disabled")
     if action_spec.get("adapter") != "render-v1":
         blockers.append("provider-adapter-disabled")
@@ -327,7 +375,7 @@ def build_proposal(args: argparse.Namespace, policy: dict[str, Any]) -> dict[str
         "schema_version": policy["schema_version"],
         "proposal_id": proposal_id,
         "fingerprint": fingerprint,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "mode": policy["mode"],
         "execution_enabled": bool(policy["execution_enabled"]),
         "external_calls": 0,
@@ -355,16 +403,19 @@ def build_proposal(args: argparse.Namespace, policy: dict[str, Any]) -> dict[str
 def register_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
     """Register a local decision proposal; never call an external provider."""
     request = proposal["request"]
-    if any(blocker in proposal["blockers"] for blocker in (
-        "resource-type-not-allowed-for-action",
-        "target-revision-required",
-        "rollback-target-required",
-        "auto-deploy-state-required",
-        "auto-deploy-only-for-set-action",
-        "reason-required",
-        "environment-id-required",
-        "health-path-required",
-    )):
+    if any(
+        blocker in proposal["blockers"]
+        for blocker in (
+            "resource-type-not-allowed-for-action",
+            "target-revision-required",
+            "rollback-target-required",
+            "auto-deploy-state-required",
+            "auto-deploy-only-for-set-action",
+            "reason-required",
+            "environment-id-required",
+            "health-path-required",
+        )
+    ):
         raise ValueError("Cannot register an incomplete PaaS proposal")
 
     # The caller has explicitly confirmed this decision-record write (decisions cell).
@@ -372,7 +423,11 @@ def register_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
     source_ref = proposal["proposal_id"]
     dedupe_key = f"paas-action:{proposal['fingerprint']}"
     title = f"PaaS {request['action']}: {request['provider']} {request['resource_type']} {request['resource_id']}"
-    target = request["rollback_target"] or request["target_revision"] or "current provider state"
+    target = (
+        request["rollback_target"]
+        or request["target_revision"]
+        or "current provider state"
+    )
     decision = (
         f"Request {request['action']} for {request['provider']} resource "
         f"{request['resource_id']} in {request['environment']} targeting {target}."
@@ -385,29 +440,52 @@ def register_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
     if existing:
         return {"decision_id": int(existing["id"]), "created": False}
     fields = {
-        "title": title, "domain": "paas", "decision": decision, "rationale": rationale,
-        "evidence_refs": ["paas-action-policy:v1", source_ref, f"provider:{request['provider']}"],
+        "title": title,
+        "domain": "paas",
+        "decision": decision,
+        "rationale": rationale,
+        "evidence_refs": [
+            "paas-action-policy:v1",
+            source_ref,
+            f"provider:{request['provider']}",
+        ],
         "confidence": 1.0,
         "expected_outcome": "Execute only after matching approval and live preflight; verify the provider result.",
         "next_action": "Review and approve/reject this proposal with decision-cli.",
-        "status": "proposed", "approval_required": True, "approval_status": "pending",
-        "action_type": "external_change", "action_status": "pending_approval", "privacy_class": "internal",
-        "source_type": "paas_action", "source_ref": source_ref, "dedupe_key": dedupe_key,
+        "status": "proposed",
+        "approval_required": True,
+        "approval_status": "pending",
+        "action_type": "external_change",
+        "action_status": "pending_approval",
+        "privacy_class": "internal",
+        "source_type": "paas_action",
+        "source_ref": source_ref,
+        "dedupe_key": dedupe_key,
     }
-    event = {"event_type": "created", "actor": "paas_action", "metadata": {
-        "proposal_id": source_ref,
-        "provider": request["provider"],
-        "action": request["action"],
-        "resource_type": request["resource_type"],
-        "environment": request["environment"],
-        "request": {key: value for key, value in request.items() if key not in {"provider_name", "support", "adapter"}},
-    }}
+    event = {
+        "event_type": "created",
+        "actor": "paas_action",
+        "metadata": {
+            "proposal_id": source_ref,
+            "provider": request["provider"],
+            "action": request["action"],
+            "resource_type": request["resource_type"],
+            "environment": request["environment"],
+            "request": {
+                key: value
+                for key, value in request.items()
+                if key not in {"provider_name", "support", "adapter"}
+            },
+        },
+    }
     try:
         created = store.create(fields, event=event)
     except DecisionStoreError as exc:
         if exc.status != 409:
             raise
-        existing = store.by_dedupe(dedupe_key)  # a concurrent registration of the same proposal won
+        existing = store.by_dedupe(
+            dedupe_key
+        )  # a concurrent registration of the same proposal won
         if existing is None:
             raise
         return {"decision_id": int(existing["id"]), "created": False}
@@ -415,7 +493,11 @@ def register_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
 
 
 def emit(payload: dict[str, Any], as_json: bool) -> None:
-    print(json.dumps(payload, ensure_ascii=False, indent=None if as_json else 2, default=str))
+    print(
+        json.dumps(
+            payload, ensure_ascii=False, indent=None if as_json else 2, default=str
+        )
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -424,22 +506,36 @@ def build_parser() -> argparse.ArgumentParser:
     catalog = commands.add_parser("catalog", help="Show the provider action policy")
     catalog.add_argument("--json", action="store_true")
 
-    propose = commands.add_parser("propose", help="Build a bounded PaaS action proposal")
+    propose = commands.add_parser(
+        "propose", help="Build a bounded PaaS action proposal"
+    )
     propose.add_argument("--provider", required=True)
-    propose.add_argument("--action", required=True, choices=("deploy", "restart", "rollback", "set-auto-deploy"))
+    propose.add_argument(
+        "--action",
+        required=True,
+        choices=("deploy", "restart", "rollback", "set-auto-deploy"),
+    )
     propose.add_argument("--resource-type", required=True)
     propose.add_argument("--resource-id", required=True)
     propose.add_argument("--environment", required=True)
     propose.add_argument("--environment-id")
     propose.add_argument("--health-path")
     propose.add_argument("--target-revision")
-    propose.add_argument("--operation-id", help="Optional id for an intentional new operation round")
+    propose.add_argument(
+        "--operation-id", help="Optional id for an intentional new operation round"
+    )
     propose.add_argument("--rollback-target")
     propose.add_argument("--auto-deploy", choices=("yes", "no"))
     propose.add_argument("--reason", required=True)
     propose.add_argument("--approval-id", type=int)
-    propose.add_argument("--register", action="store_true", help="Register a local decision record")
-    propose.add_argument("--confirm-register", action="store_true", help="Confirm the local decision-record write")
+    propose.add_argument(
+        "--register", action="store_true", help="Register a local decision record"
+    )
+    propose.add_argument(
+        "--confirm-register",
+        action="store_true",
+        help="Confirm the local decision-record write",
+    )
     propose.add_argument("--json", action="store_true")
     return parser
 

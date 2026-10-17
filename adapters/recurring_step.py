@@ -12,9 +12,22 @@ from collections.abc import Iterator, Sequence
 from datetime import date, timedelta
 from typing import Any
 
-FIXED_DAYS = {"daily": 1, "every day": 1, "weekly": 7, "every week": 7, "monthly": 30, "every month": 30,
-              "biweekly": 14, "every 2 weeks": 14, "every 3 months": 90}
-PATTERNS = ((r"every\s+(\d+)\s*months?", 30), (r"every\s+(\d+)\s*d", 1), (r"every\s+(\d+)\s*w", 7))
+FIXED_DAYS = {
+    "daily": 1,
+    "every day": 1,
+    "weekly": 7,
+    "every week": 7,
+    "monthly": 30,
+    "every month": 30,
+    "biweekly": 14,
+    "every 2 weeks": 14,
+    "every 3 months": 90,
+}
+PATTERNS = (
+    (r"every\s+(\d+)\s*months?", 30),
+    (r"every\s+(\d+)\s*d", 1),
+    (r"every\s+(\d+)\s*w", 7),
+)
 
 
 def recurrence_step(rule: str | None) -> timedelta | None:
@@ -34,7 +47,9 @@ def _day(value: Any) -> date | None:
     return date.fromisoformat(str(value)[:10]) if value not in (None, "") else None
 
 
-def next_due_dates(parent: dict[str, Any], existing: Sequence[Sequence[Any]], until: date) -> Iterator[tuple[int, date]]:
+def next_due_dates(
+    parent: dict[str, Any], existing: Sequence[Sequence[Any]], until: date
+) -> Iterator[tuple[int, date]]:
     """(occurrence, due date) pairs still to create up to ``until``.
 
     ``existing`` rows are (recurrence_occurrence, due_date, completed_at) in occurrence order.
