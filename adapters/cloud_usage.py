@@ -36,9 +36,10 @@ import math
 import re
 import sys
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 UTILS_DIR = SCRIPT_DIR
@@ -147,7 +148,7 @@ def _provider_id(value: Any) -> str:
     return str(value or "unknown").strip().lower().replace("_", "-").replace(" ", "-")
 
 
-def _safe_non_negative_number(value: Any, fallback: int | float = 0) -> int | float:
+def _safe_non_negative_number(value: Any, fallback: float = 0) -> int | float:
     """Keep provider-derived numeric projections finite and non-negative."""
     if isinstance(value, bool) or value is None or value == "":
         return fallback
@@ -191,7 +192,7 @@ def _safe_github_actions_action(value: Any, fallback: str) -> str:
     return candidate if candidate in SAFE_GITHUB_ACTIONS_ACTIONS else fallback
 
 
-def _safe_cost_number(value: Any, fallback: int | float = 0) -> int | float:
+def _safe_cost_number(value: Any, fallback: float = 0) -> int | float:
     """Keep signed provider costs finite without exposing arbitrary numbers."""
     if isinstance(value, bool) or value is None or value == "":
         return fallback
@@ -861,7 +862,7 @@ def build_snapshot(
     return {
         "schema_version": SCHEMA_VERSION,
         "mode": "live" if live else "offline",
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
         "read_only": True,
         "execution_enabled": False,
         "write_attempted": False,

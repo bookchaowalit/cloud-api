@@ -35,14 +35,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any, Protocol
 
 try:
-    from recurring_step import next_due_dates
+    from recurring_step import next_due_dates  # noqa: F401 - kept from the solo-empire copy; removal needs review
 except ImportError:  # imported as a package module
-    from .recurring_step import next_due_dates  # type: ignore[no-redef]
+    from .recurring_step import next_due_dates  # type: ignore[no-redef]  # noqa: F401
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOKEN_DIR = PROJECT_ROOT / ".runtime" / "automation-tokens"
@@ -624,7 +624,7 @@ class ApiTaskStore:
     @staticmethod
     def _target_id(kind: str, ref: str) -> int | str:
         prefix = LINK_TABLES[kind][2]
-        tail = ref[len(prefix) :] if ref.startswith(prefix) else ref
+        tail = ref.removeprefix(prefix)
         return int(tail) if tail.isdigit() else ref
 
     def links(self, *, task=None, target_type=None, target_id=None):
@@ -978,18 +978,18 @@ def open_task_store(
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 
 __all__ = [
     "ApiTaskStore",
     "ClientConfigError",
-    "client_settings",
     "TaskStore",
     "TaskStoreError",
     "automation_token",
+    "client_settings",
     "open_task_store",
-    "validate_api_url",
     "tags_list",
     "utc_now",
+    "validate_api_url",
 ]

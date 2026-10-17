@@ -8,7 +8,7 @@ import json
 import urllib.error
 import urllib.parse
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -101,7 +101,7 @@ class GitHubActionsUsageTest(unittest.TestCase):
             secret_getter=secret_getter,
             env_getter=env_getter,
             fetcher=fetcher,
-            now=datetime(2026, 9, 14, tzinfo=timezone.utc),
+            now=datetime(2026, 9, 14, tzinfo=UTC),
         )
 
         self.assertEqual(payload["status"], "healthy")
@@ -147,7 +147,7 @@ class GitHubActionsUsageTest(unittest.TestCase):
                 live=True,
                 env_getter=Mock(return_value=None),
                 fetcher=fetcher,
-                now=datetime(2026, 9, 14, tzinfo=timezone.utc),
+                now=datetime(2026, 9, 14, tzinfo=UTC),
             )
 
         resolver.assert_called_once_with(github_actions_usage.GITHUB_PROVIDER)

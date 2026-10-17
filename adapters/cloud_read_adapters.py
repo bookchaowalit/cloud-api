@@ -8,7 +8,8 @@ import math
 import re
 import urllib.error
 import urllib.request
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 from urllib.parse import urlsplit
 
 from auth_resolver import AuthResolution, SecretGetter, resolve_provider_auth
@@ -464,9 +465,9 @@ def collect_provider(
                 or "@" not in email
             ):
                 raise CloudReadError("invalid_credential")
-            encoded = base64.b64encode(
-                f"{email}:{auth.credential}".encode("utf-8")
-            ).decode("ascii")
+            encoded = base64.b64encode(f"{email}:{auth.credential}".encode()).decode(
+                "ascii"
+            )
             headers = {"Authorization": f"Basic {encoded}"}
         get = json_getter or get_json
 

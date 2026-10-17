@@ -13,7 +13,7 @@ import hashlib
 import json
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
 
@@ -140,7 +140,7 @@ def _parse_db_timestamp(value: Any) -> datetime | None:
     if not text:
         return None
     try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))  # noqa: FURB162 - keep the explicit "Z" handling; lint pass is behaviour-neutral
     except ValueError:
         try:
             parsed = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
@@ -150,8 +150,8 @@ def _parse_db_timestamp(value: Any) -> datetime | None:
     # explicit UTC offset, but treating legacy naive values as UTC keeps the
     # expiry check deterministic and avoids local-time ambiguity.
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _row_value(row: Any, key: str) -> Any:
@@ -186,10 +186,10 @@ def assess_approval_row(
     }
     timestamp_source = "decided_at" if _row_value(row, "decided_at") else "updated_at"
     approval_at = _parse_db_timestamp(_row_value(row, timestamp_source))
-    current_time = now or datetime.now(timezone.utc)
+    current_time = now or datetime.now(UTC)
     if current_time.tzinfo is None:
-        current_time = current_time.replace(tzinfo=timezone.utc)
-    current_time = current_time.astimezone(timezone.utc)
+        current_time = current_time.replace(tzinfo=UTC)
+    current_time = current_time.astimezone(UTC)
     age_seconds = (current_time - approval_at).total_seconds() if approval_at else None
     checks["approval_timestamp_present"] = approval_at is not None
     checks["approval_timestamp_valid"] = approval_at is not None
@@ -375,7 +375,7 @@ def build_proposal(args: argparse.Namespace, policy: dict[str, Any]) -> dict[str
         "schema_version": policy["schema_version"],
         "proposal_id": proposal_id,
         "fingerprint": fingerprint,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "mode": policy["mode"],
         "execution_enabled": bool(policy["execution_enabled"]),
         "external_calls": 0,

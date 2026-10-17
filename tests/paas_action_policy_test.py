@@ -9,7 +9,7 @@ import sqlite3
 import tempfile
 import unittest
 from argparse import Namespace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from unittest.mock import patch
 
@@ -180,9 +180,7 @@ class PaaSActionPolicyTest(unittest.TestCase):
             ):
                 proposal = paas_action.build_proposal(proposal_args(), self.policy)
                 registration = paas_action.register_proposal(proposal)
-                expired_at = (
-                    datetime.now(timezone.utc) - timedelta(hours=2)
-                ).isoformat()
+                expired_at = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
                 conn = sqlite3.connect(db_path)
                 conn.execute(
                     """

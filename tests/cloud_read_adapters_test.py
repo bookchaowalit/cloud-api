@@ -350,9 +350,11 @@ class CloudReadAdaptersTest(unittest.TestCase):
             BytesIO(b"PRIVATE_SENTINEL"),
         )
         opener.open.side_effect = redirect
-        with patch.object(adapters.urllib.request, "build_opener", return_value=opener):
-            with self.assertRaisesRegex(adapters.CloudReadError, "^redirect_blocked$"):
-                adapters.get_json("neon", "/projects", {})
+        with (
+            patch.object(adapters.urllib.request, "build_opener", return_value=opener),
+            self.assertRaisesRegex(adapters.CloudReadError, "^redirect_blocked$"),
+        ):
+            adapters.get_json("neon", "/projects", {})
         with self.assertRaises(adapters.CloudReadError):
             adapters.get_json("neon", "//example.com", {})
 
@@ -368,13 +370,13 @@ class CloudReadAdaptersTest(unittest.TestCase):
                 response.read.return_value = body
                 opener = Mock()
                 opener.open.return_value = response
-                with patch.object(
-                    adapters.urllib.request, "build_opener", return_value=opener
+                with (
+                    patch.object(
+                        adapters.urllib.request, "build_opener", return_value=opener
+                    ),
+                    self.assertRaisesRegex(adapters.CloudReadError, f"^{expected}$"),
                 ):
-                    with self.assertRaisesRegex(
-                        adapters.CloudReadError, f"^{expected}$"
-                    ):
-                        adapters.get_json("neon", "/projects", {})
+                    adapters.get_json("neon", "/projects", {})
 
 
 if __name__ == "__main__":

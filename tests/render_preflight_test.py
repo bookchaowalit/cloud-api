@@ -178,13 +178,13 @@ class RenderProbeTest(unittest.TestCase):
         for source in ("api", "cli", "action"):
             with self.subTest(source=source):
                 transport = ProbeTransport(health_url, 302, "http://127.0.0.1:1/admin")
-                arguments = dict(
-                    live=True,
-                    service_id=service["id"],
-                    environment_id=environment["id"],
-                    target_deploy_id=deploy["id"],
-                    health_url=health_url,
-                )
+                arguments = {
+                    "live": True,
+                    "service_id": service["id"],
+                    "environment_id": environment["id"],
+                    "target_deploy_id": deploy["id"],
+                    "health_url": health_url,
+                }
                 if source == "action":
                     discovery = {
                         "status": "ready",
@@ -234,7 +234,8 @@ class RenderProbeTest(unittest.TestCase):
                         result = self.probe(
                             transport,
                             lambda: render_preflight.preflight(
-                                source="cli", **arguments
+                                source="cli",
+                                **arguments,  # noqa: B023 - called within the same loop iteration
                             ),
                         )
                 else:
@@ -252,7 +253,8 @@ class RenderProbeTest(unittest.TestCase):
                         result = self.probe(
                             transport,
                             lambda: render_preflight.preflight(
-                                source="api", **arguments
+                                source="api",
+                                **arguments,  # noqa: B023 - called within the same loop iteration
                             ),
                         )
                 self.assertFalse(result["preflight_passed"])

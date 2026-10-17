@@ -27,7 +27,7 @@ import subprocess
 import sys
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -299,7 +299,7 @@ def _base_payload(mode: str, action: str) -> dict[str, Any]:
         "write_actions_enabled": False,
         "external_calls": 0,
         "write_attempted": False,
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -357,7 +357,7 @@ def discover(
         "source": source,
     }
 
-    auth, token, credentials, auth_source = _auth_context(
+    _auth, token, credentials, auth_source = _auth_context(
         live=live,
         source=source,
         auth=_auth,
@@ -614,7 +614,7 @@ def preflight(
     if not live:
         blockers.append("live-check-required")
 
-    auth, token, credentials, auth_source = _auth_context(
+    _auth, token, credentials, auth_source = _auth_context(
         live=live,
         source=source,
         auth=_auth,
@@ -857,9 +857,12 @@ def action_preflight(
         blockers.append("invalid-environment")
     if not live:
         blockers.append("live-check-required")
-    if action == "deploy" and not isinstance(target_revision, str):
-        blockers.append("full-commit-sha-required")
-    elif action == "deploy" and not FULL_SHA.fullmatch(target_revision):
+    if (
+        action == "deploy"
+        and not isinstance(target_revision, str)
+        or action == "deploy"
+        and not FULL_SHA.fullmatch(target_revision)
+    ):
         blockers.append("full-commit-sha-required")
     if action == "set-auto-deploy" and auto_deploy not in {"yes", "no"}:
         blockers.append("invalid-auto-deploy-state")

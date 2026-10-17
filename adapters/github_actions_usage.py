@@ -29,9 +29,10 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -163,7 +164,7 @@ def _normalise_plan(value: Any) -> str | None:
 
 
 def _month_window(now: datetime | None = None) -> dict[str, int | str]:
-    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    current = (now or datetime.now(UTC)).astimezone(UTC)
     year = current.year
     month = current.month
     last_day = calendar.monthrange(year, month)[1]

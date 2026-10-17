@@ -28,7 +28,7 @@ def _number(value: Any) -> int | float | None:
         number = float(value)
     except (TypeError, ValueError):
         return None
-    if number != number or number in (float("inf"), float("-inf")) or number < 0:
+    if number != number or number in (float("inf"), float("-inf")) or number < 0:  # noqa: PLR0124 - NaN check
         return None
     return int(number) if number.is_integer() else round(number, 6)
 

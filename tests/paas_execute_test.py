@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from threading import Barrier
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -173,7 +173,7 @@ class ExecutionTest(unittest.TestCase):
 
     def test_expired_approval_blocks_before_provider_preflight(self):
         self.approve()
-        expired_at = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        expired_at = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
         with database_connection() as conn:
             conn.execute(
                 "UPDATE decision_records SET decided_at=?, updated_at=? WHERE id=?",
@@ -285,9 +285,11 @@ class ExecutionTest(unittest.TestCase):
         self.approve()
         policy = execution.actions.load_policy()
         policy["execution_enabled"] = False
-        with patch.object(execution.actions, "load_policy", return_value=policy):
-            with self.assertRaisesRegex(execution.GateError, "execution-disabled"):
-                execution.execute(self.id, lambda: self.adapter)
+        with (
+            patch.object(execution.actions, "load_policy", return_value=policy),
+            self.assertRaisesRegex(execution.GateError, "execution-disabled"),
+        ):
+            execution.execute(self.id, lambda: self.adapter)
         self.adapter.preflight.assert_not_called()
 
     def test_validation_rejects_traversal_and_arbitrary_health_targets(self):

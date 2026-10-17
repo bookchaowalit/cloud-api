@@ -19,9 +19,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -355,7 +356,7 @@ def run_health_check(live: bool = False) -> dict[str, Any]:
     return {
         "version": registry["version"],
         "mode": "live" if live else "offline",
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
         "write_actions_enabled": bool(registry.get("write_actions_enabled", False)),
         "write_actions_reason": registry.get("write_actions_reason"),
         "providers": providers,

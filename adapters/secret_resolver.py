@@ -613,18 +613,19 @@ def probe_secrets(names: tuple[str, ...] | list[str] | None = None) -> dict[str,
         overall = STATUS_AUTHENTICATION_FAILED
     elif any(s == STATUS_PROVIDER_UNREACHABLE for s in statuses):
         overall = STATUS_PROVIDER_UNREACHABLE
-    elif mode not in {"env", "auto"} and not configured:
-        overall = STATUS_CREDENTIALS_NOT_CONFIGURED
     elif (
-        mode == "auto"
-        and isinstance(provider, EnvProvider)
-        and all(
-            s in {STATUS_SECRET_NOT_FOUND, STATUS_CREDENTIALS_NOT_CONFIGURED}
-            for s in statuses
+        mode not in {"env", "auto"}
+        and not configured
+        or (
+            mode == "auto"
+            and isinstance(provider, EnvProvider)
+            and all(
+                s in {STATUS_SECRET_NOT_FOUND, STATUS_CREDENTIALS_NOT_CONFIGURED}
+                for s in statuses
+            )
         )
+        or any(s == STATUS_CREDENTIALS_NOT_CONFIGURED for s in statuses)
     ):
-        overall = STATUS_CREDENTIALS_NOT_CONFIGURED
-    elif any(s == STATUS_CREDENTIALS_NOT_CONFIGURED for s in statuses):
         overall = STATUS_CREDENTIALS_NOT_CONFIGURED
     elif any(s == STATUS_SECRET_NOT_FOUND for s in statuses):
         overall = STATUS_SECRET_NOT_FOUND

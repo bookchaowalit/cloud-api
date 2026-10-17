@@ -12,7 +12,7 @@ import json
 import re
 import sys
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -469,7 +469,7 @@ def update(
 def approve(decision_id: int, proposal_id: str) -> dict:
     # Approving is the owner's act (decisions.decision:approve), not the PaaS operator automation's.
     store = open_decision_store("owner-cli", channel="cli")
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     row, request, attempts = read_record(store, decision_id)
     require(row["source_ref"] == proposal_id, "reviewed-proposal-mismatch")
     require(
@@ -539,7 +539,7 @@ def execute(decision_id: int, adapter_factory=Render) -> dict:
     attempt = {
         "status": "submission_unknown",
         "action": request["action"],
-        "claimed_at": datetime.now(timezone.utc).isoformat(),
+        "claimed_at": datetime.now(UTC).isoformat(),
         **recovery,
     }
     lock_key = actions.execution_lock_key(request)
@@ -612,7 +612,7 @@ def verify(decision_id: int, adapter_factory=Render) -> dict:
         }
     if status == "pending":
         age = (
-            datetime.now(timezone.utc) - datetime.fromisoformat(attempt["claimed_at"])
+            datetime.now(UTC) - datetime.fromisoformat(attempt["claimed_at"])
         ).total_seconds()
         if age > 900:
             return {
@@ -662,7 +662,7 @@ def reconcile(decision_id: int, adapter_factory=Render) -> dict:
         }
     if status == "pending":
         age = (
-            datetime.now(timezone.utc) - datetime.fromisoformat(attempt["claimed_at"])
+            datetime.now(UTC) - datetime.fromisoformat(attempt["claimed_at"])
         ).total_seconds()
         if age > 900:
             return {

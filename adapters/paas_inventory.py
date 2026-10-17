@@ -12,9 +12,10 @@ import json
 import sys
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -490,7 +491,7 @@ def run_inventory(live: bool = False, provider_id: str | None = None) -> dict[st
     return {
         "schema_version": SCHEMA_VERSION,
         "mode": "live" if live else "offline",
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
         "read_only": True,
         "execution_enabled": False,
         "write_attempted": False,

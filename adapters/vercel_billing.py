@@ -24,9 +24,10 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
+from collections.abc import Callable, Iterable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -102,8 +103,7 @@ def _get_jsonl(url: str, headers: dict[str, str] | None = None) -> Iterable[byte
         stream: Any = response
         if str(response.headers.get("Content-Encoding", "")).lower() == "gzip":
             stream = gzip.GzipFile(fileobj=response)
-        for line in stream:
-            yield line
+        yield from stream
         if stream is not response:
             stream.close()
 
@@ -114,9 +114,7 @@ def _empty_window() -> dict[str, str | None]:
 
 def _format_timestamp(value: datetime) -> str:
     return (
-        value.astimezone(timezone.utc)
-        .isoformat(timespec="milliseconds")
-        .replace("+00:00", "Z")
+        value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     )
 
 
@@ -125,18 +123,18 @@ def _parse_timestamp(value: Any) -> datetime:
     if not raw:
         raise AdapterError("invalid_billing_window")
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
-        return datetime.fromisoformat(raw).replace(tzinfo=timezone.utc)
+        return datetime.fromisoformat(raw).replace(tzinfo=UTC)
     try:
-        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))  # noqa: FURB162 - keep the explicit "Z" handling; lint pass is behaviour-neutral
     except ValueError as exc:
         raise AdapterError("invalid_billing_window") from exc
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _normalise_window(from_date: Any = None, to_date: Any = None) -> dict[str, str]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if from_date is None and to_date is None:
         end = now
         start = end - timedelta(days=DEFAULT_WINDOW_DAYS)
