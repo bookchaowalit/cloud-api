@@ -1,0 +1,3 @@
+# Runtime dependency of the adapters (registry/cloud-providers.yaml, account metadata).
+# Everything else is the standard library.
+PyYAML>=6.0.2,<7
