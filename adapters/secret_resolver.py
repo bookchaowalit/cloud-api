@@ -118,6 +118,7 @@ def _cloud_secret_paths() -> dict[str, str]:
                 paths[name] = manager["path"]
     return paths
 
+
 # Secrets required for the Gmail data pipeline end-to-end check.
 GOOGLE_PIPELINE_SECRETS = (
     "GOOGLE_CLIENT_ID",
@@ -204,10 +205,18 @@ def _truthy(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _safe_http_json(url: str, *, method: str = "GET", data: bytes | None = None,
-                   headers: dict[str, str] | None = None, timeout: int = 10) -> dict[str, Any]:
+def _safe_http_json(
+    url: str,
+    *,
+    method: str = "GET",
+    data: bytes | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: int = 10,
+) -> dict[str, Any]:
     """Make a JSON request without exposing response bodies in exceptions."""
-    request = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
+    request = urllib.request.Request(
+        url, data=data, headers=headers or {}, method=method
+    )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = json.loads(response.read())
@@ -236,22 +245,34 @@ class InfisicalProvider:
     name = "infisical"
 
     def __init__(self) -> None:
-        self.site_url = os.environ.get("INFISICAL_SITE_URL", "https://app.infisical.com").rstrip("/")
-        self.project_id = os.environ.get("INFISICAL_PROJECT_ID", DEFAULT_INFISICAL_PROJECT_ID)
+        self.site_url = os.environ.get(
+            "INFISICAL_SITE_URL", "https://app.infisical.com"
+        ).rstrip("/")
+        self.project_id = os.environ.get(
+            "INFISICAL_PROJECT_ID", DEFAULT_INFISICAL_PROJECT_ID
+        )
         self.environment = os.environ.get("INFISICAL_ENVIRONMENT", "dev")
         self.secret_path = os.environ.get(
             "INFISICAL_SECRET_PATH", DEFAULT_INFISICAL_SECRET_PATH
         )
-        self.client_id = os.environ.get("INFISICAL_UNIVERSAL_AUTH_CLIENT_ID") or os.environ.get("INFISICAL_CLIENT_ID")
-        self.client_secret = os.environ.get("INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET") or os.environ.get("INFISICAL_CLIENT_SECRET")
-        self.access_token = os.environ.get("INFISICAL_ACCESS_TOKEN") or os.environ.get("INFISICAL_TOKEN")
+        self.client_id = os.environ.get(
+            "INFISICAL_UNIVERSAL_AUTH_CLIENT_ID"
+        ) or os.environ.get("INFISICAL_CLIENT_ID")
+        self.client_secret = os.environ.get(
+            "INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET"
+        ) or os.environ.get("INFISICAL_CLIENT_SECRET")
+        self.access_token = os.environ.get("INFISICAL_ACCESS_TOKEN") or os.environ.get(
+            "INFISICAL_TOKEN"
+        )
         self._token_expires_at = 0.0
 
     def is_configured(self) -> bool:
         cli_enabled = _truthy(os.environ.get("INFISICAL_CLI_ENABLED")) and shutil.which(
             os.environ.get("INFISICAL_CLI", "infisical")
         )
-        return bool(self.access_token or (self.client_id and self.client_secret) or cli_enabled)
+        return bool(
+            self.access_token or (self.client_id and self.client_secret) or cli_enabled
+        )
 
     def _get_cli(self, name: str) -> str | None:
         if not _truthy(os.environ.get("INFISICAL_CLI_ENABLED")):
@@ -260,10 +281,16 @@ class InfisicalProvider:
         if not binary:
             return None
         args = [
-            binary, "secrets", "get", name,
-            "--env", self.environment,
-            "--path", self.secret_path,
-            "--plain", "--silent",
+            binary,
+            "secrets",
+            "get",
+            name,
+            "--env",
+            self.environment,
+            "--path",
+            self.secret_path,
+            "--plain",
+            "--silent",
         ]
         if self.project_id:
             args.extend(["--projectId", self.project_id])
@@ -271,8 +298,13 @@ class InfisicalProvider:
         child_env["INFISICAL_DISABLE_UPDATE_CHECK"] = "true"
         try:
             result = subprocess.run(
-                args, capture_output=True, text=True, timeout=20,
-                check=False, env=child_env, stdin=subprocess.DEVNULL,
+                args,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+                env=child_env,
+                stdin=subprocess.DEVNULL,
             )
         except (OSError, subprocess.TimeoutExpired):
             raise SecretResolutionError("infisical_cli_unavailable") from None
@@ -309,20 +341,25 @@ class InfisicalProvider:
             raise SecretUnavailable("infisical_auth_not_configured")
         if self.access_token and time.time() < self._token_expires_at:
             return self.access_token
-        body = urllib.parse.urlencode({
-            "clientId": self.client_id,
-            "clientSecret": self.client_secret,
-        }).encode()
+        body = urllib.parse.urlencode(
+            {
+                "clientId": self.client_id,
+                "clientSecret": self.client_secret,
+            }
+        ).encode()
         response = _safe_http_json(
             f"{self.site_url}/api/v1/auth/universal-auth/login",
-            method="POST", data=body,
+            method="POST",
+            data=body,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         token = response.get("accessToken")
         if not token:
             raise SecretResolutionError("infisical_auth_invalid_response")
         self.access_token = str(token)
-        self._token_expires_at = time.time() + max(int(response.get("expiresIn", 3600)) - 30, 30)
+        self._token_expires_at = time.time() + max(
+            int(response.get("expiresIn", 3600)) - 30, 30
+        )
         return self.access_token
 
     def get(self, name: str) -> str | None:
@@ -330,12 +367,14 @@ class InfisicalProvider:
         if cli_value is not None:
             return cli_value
         token = self._get_api_token()
-        query = urllib.parse.urlencode({
-            "projectId": self.project_id,
-            "environment": self.environment,
-            "secretPath": self.secret_path,
-            "viewSecretValue": "true",
-        })
+        query = urllib.parse.urlencode(
+            {
+                "projectId": self.project_id,
+                "environment": self.environment,
+                "secretPath": self.secret_path,
+                "viewSecretValue": "true",
+            }
+        )
         response = _safe_http_json(
             f"{self.site_url}/api/v4/secrets/{urllib.parse.quote(name, safe='')}?{query}",
             headers={"Authorization": f"Bearer {token}"},
@@ -352,7 +391,9 @@ class VaultProvider:
         self.address = os.environ.get("VAULT_ADDR", "").rstrip("/")
         self.namespace = os.environ.get("VAULT_NAMESPACE")
         self.mount = os.environ.get("VAULT_KV_MOUNT", "secret").strip("/")
-        self.secret_path = os.environ.get("VAULT_SECRET_PATH", "solo-empire/google").strip("/")
+        self.secret_path = os.environ.get(
+            "VAULT_SECRET_PATH", "solo-empire/google"
+        ).strip("/")
         self.auth_mount = os.environ.get("VAULT_AUTH_MOUNT", "approle").strip("/")
         self.token = os.environ.get("VAULT_TOKEN")
         self.role_id = os.environ.get("VAULT_ROLE_ID")
@@ -374,12 +415,19 @@ class VaultProvider:
             raise SecretUnavailable("vault_auth_not_configured")
         response = _safe_http_json(
             f"{self.address}/v1/auth/{urllib.parse.quote(self.auth_mount, safe='')}/login",
-            method="POST", data=json.dumps({
-                "role_id": self.role_id, "secret_id": self.secret_id,
-            }).encode(),
-            headers={"Content-Type": "application/json", **({"X-Vault-Namespace": self.namespace} if self.namespace else {})},
+            method="POST",
+            data=json.dumps(
+                {
+                    "role_id": self.role_id,
+                    "secret_id": self.secret_id,
+                }
+            ).encode(),
+            headers={
+                "Content-Type": "application/json",
+                **({"X-Vault-Namespace": self.namespace} if self.namespace else {}),
+            },
         )
-        self.token = ((response.get("auth") or {}).get("client_token"))
+        self.token = (response.get("auth") or {}).get("client_token")
         if not self.token:
             raise SecretResolutionError("vault_auth_invalid_response")
 
@@ -390,7 +438,7 @@ class VaultProvider:
             f"{urllib.parse.quote(self.secret_path, safe='/')}",
             headers=self._headers(),
         )
-        values = ((response.get("data") or {}).get("data") or {})
+        values = (response.get("data") or {}).get("data") or {}
         value = values.get(name)
         return str(value) if value is not None and str(value) != "" else None
 
@@ -428,7 +476,10 @@ def get_secret_with_source(
         configured_path
         if configured_path and configured_path != DEFAULT_INFISICAL_SECRET_PATH
         else _cloud_secret_paths().get(
-            name, SECRET_PATH_BY_KEY.get(name, configured_path or DEFAULT_INFISICAL_SECRET_PATH)
+            name,
+            SECRET_PATH_BY_KEY.get(
+                name, configured_path or DEFAULT_INFISICAL_SECRET_PATH
+            ),
         )
     )
 
@@ -462,7 +513,9 @@ def get_secret_with_source(
                 source = "env" if value else None
             else:
                 if value:
-                    source = str(getattr(configured_provider, "name", "secret_manager")).lower()
+                    source = str(
+                        getattr(configured_provider, "name", "secret_manager")
+                    ).lower()
     else:
         provider = prepare_provider(_provider(mode))
         if not provider.is_configured():
@@ -490,7 +543,9 @@ def get_secret_with_source(
     return value, source
 
 
-def get_secret(name: str, *, default: str | None = None, required: bool = False) -> str | None:
+def get_secret(
+    name: str, *, default: str | None = None, required: bool = False
+) -> str | None:
     """Resolve one secret according to the configured provider policy."""
     value, _ = get_secret_with_source(name, default=default, required=required)
     return value
@@ -499,7 +554,9 @@ def get_secret(name: str, *, default: str | None = None, required: bool = False)
 def probe_secret(name: str) -> dict[str, str]:
     """Resolve one secret name and report only a public status (never the value)."""
     mode, provider = resolve_active_provider()
-    provider_name = getattr(provider, "name", "unknown") if provider is not None else "none"
+    provider_name = (
+        getattr(provider, "name", "unknown") if provider is not None else "none"
+    )
     result: dict[str, str] = {
         "name": name,
         "provider": provider_name,
@@ -536,7 +593,9 @@ def probe_secrets(names: tuple[str, ...] | list[str] | None = None) -> dict[str,
     """Health-check secret names for the active provider. Never includes values."""
     names = tuple(names or GOOGLE_PIPELINE_SECRETS)
     mode, provider = resolve_active_provider()
-    provider_name = getattr(provider, "name", "none") if provider is not None else "none"
+    provider_name = (
+        getattr(provider, "name", "none") if provider is not None else "none"
+    )
     if provider is None:
         configured = False
     elif isinstance(provider, EnvProvider):
@@ -556,8 +615,13 @@ def probe_secrets(names: tuple[str, ...] | list[str] | None = None) -> dict[str,
         overall = STATUS_PROVIDER_UNREACHABLE
     elif mode not in {"env", "auto"} and not configured:
         overall = STATUS_CREDENTIALS_NOT_CONFIGURED
-    elif mode == "auto" and isinstance(provider, EnvProvider) and all(
-        s in {STATUS_SECRET_NOT_FOUND, STATUS_CREDENTIALS_NOT_CONFIGURED} for s in statuses
+    elif (
+        mode == "auto"
+        and isinstance(provider, EnvProvider)
+        and all(
+            s in {STATUS_SECRET_NOT_FOUND, STATUS_CREDENTIALS_NOT_CONFIGURED}
+            for s in statuses
+        )
     ):
         overall = STATUS_CREDENTIALS_NOT_CONFIGURED
     elif any(s == STATUS_CREDENTIALS_NOT_CONFIGURED for s in statuses):
@@ -580,7 +644,11 @@ def probe_secrets(names: tuple[str, ...] | list[str] | None = None) -> dict[str,
             {
                 "name": item["name"],
                 "status": item["status"],
-                **({"error_class": item["error_class"]} if item.get("error_class") else {}),
+                **(
+                    {"error_class": item["error_class"]}
+                    if item.get("error_class")
+                    else {}
+                ),
             }
             for item in secrets
         ],

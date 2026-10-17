@@ -229,7 +229,9 @@ def _safe_timestamp(value: Any, fallback: str | None = None) -> str | None:
     return candidate if SAFE_TIMESTAMP_PATTERN.fullmatch(candidate) else fallback
 
 
-def _account_records(account_root: Path = ACCOUNT_ROOT) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+def _account_records(
+    account_root: Path = ACCOUNT_ROOT,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     """Read only allow-listed account metadata; never return secret-shaped fields."""
     try:
         import yaml
@@ -257,17 +259,30 @@ def _account_records(account_root: Path = ACCOUNT_ROOT) -> tuple[list[dict[str, 
                     # sensitive than account_name/account_id/endpoints.
                     "metadata_ref": "/".join(relative.parts),
                     "lane": lane,
-                    "provider": _provider_id(payload.get("provider") or directory_provider),
+                    "provider": _provider_id(
+                        payload.get("provider") or directory_provider
+                    ),
                     "plan_type": _safe_scalar(payload.get("plan_type")),
                     "status": _safe_scalar(payload.get("status")) or "unknown",
                     "budget_guard": _safe_scalar(payload.get("budget_guard")),
-                    "monthly_budget_usd": _number_or_none(payload.get("monthly_budget_usd")),
-                    "review_on": _safe_scalar(payload.get("review_on") or payload.get("quota_review_on")),
-                    "resource_hint_count": len(resources) if isinstance(resources, dict) else 0,
+                    "monthly_budget_usd": _number_or_none(
+                        payload.get("monthly_budget_usd")
+                    ),
+                    "review_on": _safe_scalar(
+                        payload.get("review_on") or payload.get("quota_review_on")
+                    ),
+                    "resource_hint_count": len(resources)
+                    if isinstance(resources, dict)
+                    else 0,
                 }
             )
         except Exception as exc:
-            errors.append({"source": str(path.relative_to(account_root.parent.parent)), "error_class": type(exc).__name__})
+            errors.append(
+                {
+                    "source": str(path.relative_to(account_root.parent.parent)),
+                    "error_class": type(exc).__name__,
+                }
+            )
     return records, errors
 
 
@@ -308,7 +323,14 @@ def _inventory_summary(
                     "total_known": False,
                 },
             },
-            [{"source": "paas_inventory", "error_class": _safe_error_class(type(exc).__name__, "provider_error")}],
+            [
+                {
+                    "source": "paas_inventory",
+                    "error_class": _safe_error_class(
+                        type(exc).__name__, "provider_error"
+                    ),
+                }
+            ],
         )
 
     providers: list[dict[str, Any]] = []
@@ -331,30 +353,56 @@ def _inventory_summary(
             "dashboard_url": _safe_scalar(item.get("dashboard_url")),
         }
         if item.get("status") == "error":
-            provider["error_class"] = _safe_error_class(item.get("error_class"), "provider_error")
+            provider["error_class"] = _safe_error_class(
+                item.get("error_class"), "provider_error"
+            )
         if item.get("status") == "not_configured":
-            provider["credential_state"] = _safe_scalar(item.get("credential_state")) or "not_configured"
+            provider["credential_state"] = (
+                _safe_scalar(item.get("credential_state")) or "not_configured"
+            )
         elif item.get("status") == "configured":
             provider["credential_state"] = "configured"
         elif item.get("status") == "healthy":
             provider["credential_state"] = "verified_read_only"
         providers.append(provider)
 
-    summary = payload.get("summary") if isinstance(payload, dict) and isinstance(payload.get("summary"), dict) else {}
+    summary = (
+        payload.get("summary")
+        if isinstance(payload, dict) and isinstance(payload.get("summary"), dict)
+        else {}
+    )
     normalized = {
-        "schema_version": payload.get("schema_version", "solo-empire.paas-inventory.v1") if isinstance(payload, dict) else "solo-empire.paas-inventory.v1",
+        "schema_version": payload.get("schema_version", "solo-empire.paas-inventory.v1")
+        if isinstance(payload, dict)
+        else "solo-empire.paas-inventory.v1",
         "mode": "live" if live else "offline",
         "providers": providers,
         "summary": {
             "providers": len(providers),
-            "healthy": int(summary.get("healthy") or sum(item["status"] == "healthy" for item in providers)),
-            "configured": int(summary.get("configured") or sum(item["status"] == "configured" for item in providers)),
-            "not_configured": int(summary.get("not_configured") or sum(item["status"] == "not_configured" for item in providers)),
-            "errors": int(summary.get("errors") or sum(item["status"] == "error" for item in providers)),
-            "resources": int(summary.get("resources") or sum(item["resource_count"] for item in providers)),
+            "healthy": int(
+                summary.get("healthy")
+                or sum(item["status"] == "healthy" for item in providers)
+            ),
+            "configured": int(
+                summary.get("configured")
+                or sum(item["status"] == "configured" for item in providers)
+            ),
+            "not_configured": int(
+                summary.get("not_configured")
+                or sum(item["status"] == "not_configured" for item in providers)
+            ),
+            "errors": int(
+                summary.get("errors")
+                or sum(item["status"] == "error" for item in providers)
+            ),
+            "resources": int(
+                summary.get("resources")
+                or sum(item["resource_count"] for item in providers)
+            ),
             "partial_providers": sum(bool(item.get("partial")) for item in providers),
             "has_more": any(bool(item.get("has_more")) for item in providers),
-            "total_known": bool(providers) and all(bool(item.get("total_known", True)) for item in providers),
+            "total_known": bool(providers)
+            and all(bool(item.get("total_known", True)) for item in providers),
         },
     }
     return normalized, errors
@@ -369,33 +417,60 @@ def _r2_summary(
     try:
         payload = metrics_runner(live=live)
     except Exception as exc:
-        return empty_r2_result(live=live), [{"source": "cloudflare_r2_usage", "error_class": _safe_error_class(type(exc).__name__, "provider_error")}]
+        return empty_r2_result(live=live), [
+            {
+                "source": "cloudflare_r2_usage",
+                "error_class": _safe_error_class(type(exc).__name__, "provider_error"),
+            }
+        ]
 
     fallback = empty_r2_result(live=live)
     if not isinstance(payload, dict):
-        return fallback, [{"source": "cloudflare_r2_usage", "error_class": "invalid_adapter_result"}]
+        return fallback, [
+            {"source": "cloudflare_r2_usage", "error_class": "invalid_adapter_result"}
+        ]
 
     metric_fields = ("metadata_bytes", "object_count", "payload_bytes", "payload_gib")
     storage_classes: dict[str, dict[str, dict[str, int | float]]] = {}
-    raw_classes = payload.get("storage_classes") if isinstance(payload.get("storage_classes"), dict) else {}
+    raw_classes = (
+        payload.get("storage_classes")
+        if isinstance(payload.get("storage_classes"), dict)
+        else {}
+    )
     for class_id in ("standard", "infrequent_access"):
-        raw_class = raw_classes.get(class_id) if isinstance(raw_classes.get(class_id), dict) else {}
+        raw_class = (
+            raw_classes.get(class_id)
+            if isinstance(raw_classes.get(class_id), dict)
+            else {}
+        )
         storage_classes[class_id] = {}
         for state in ("published", "uploaded"):
-            raw_group = raw_class.get(state) if isinstance(raw_class.get(state), dict) else {}
+            raw_group = (
+                raw_class.get(state) if isinstance(raw_class.get(state), dict) else {}
+            )
             storage_classes[class_id][state] = {
                 field: _safe_non_negative_number(raw_group.get(field, 0))
                 for field in metric_fields
             }
 
     fallback_estimate = fallback["storage_cost_estimate"]
-    raw_estimate = payload.get("storage_cost_estimate") if isinstance(payload.get("storage_cost_estimate"), dict) else {}
+    raw_estimate = (
+        payload.get("storage_cost_estimate")
+        if isinstance(payload.get("storage_cost_estimate"), dict)
+        else {}
+    )
     estimate_components: dict[str, dict[str, int | float]] = {}
     for component_id in ("standard", "infrequent_access"):
         fallback_component = fallback_estimate[component_id]
-        raw_component = raw_estimate.get(component_id) if isinstance(raw_estimate.get(component_id), dict) else {}
+        raw_component = (
+            raw_estimate.get(component_id)
+            if isinstance(raw_estimate.get(component_id), dict)
+            else {}
+        )
         estimate_components[component_id] = {
-            field: _safe_non_negative_number(raw_component.get(field), fallback_component[field])
+            field: _safe_non_negative_number(
+                raw_component.get(field), fallback_component[field]
+            )
             for field in (
                 "payload_gb",
                 "free_gb_month",
@@ -449,17 +524,32 @@ def _r2_summary(
         "payload_bytes": _safe_non_negative_number(payload.get("payload_bytes")),
         "payload_gib": _safe_non_negative_number(payload.get("payload_gib")),
         "metadata_bytes": _safe_non_negative_number(payload.get("metadata_bytes")),
-        "uploaded_object_count": _safe_non_negative_number(payload.get("uploaded_object_count")),
-        "uploaded_payload_bytes": _safe_non_negative_number(payload.get("uploaded_payload_bytes")),
-        "uploaded_payload_gib": _safe_non_negative_number(payload.get("uploaded_payload_gib")),
+        "uploaded_object_count": _safe_non_negative_number(
+            payload.get("uploaded_object_count")
+        ),
+        "uploaded_payload_bytes": _safe_non_negative_number(
+            payload.get("uploaded_payload_bytes")
+        ),
+        "uploaded_payload_gib": _safe_non_negative_number(
+            payload.get("uploaded_payload_gib")
+        ),
         "storage_cost_estimate": normalized_estimate,
         "storage_classes": storage_classes,
     }
     if normalized["status"] == "error":
-        normalized["error_class"] = _safe_error_class(payload.get("error_class"), "provider_error")
-        errors.append({"source": "cloudflare_r2_usage", "error_class": normalized["error_class"]})
+        normalized["error_class"] = _safe_error_class(
+            payload.get("error_class"), "provider_error"
+        )
+        errors.append(
+            {"source": "cloudflare_r2_usage", "error_class": normalized["error_class"]}
+        )
     elif live and normalized["status"] == "not_configured":
-        errors.append({"source": "cloudflare_r2_usage", "error_class": "credentials_not_configured"})
+        errors.append(
+            {
+                "source": "cloudflare_r2_usage",
+                "error_class": "credentials_not_configured",
+            }
+        )
     return normalized, errors
 
 
@@ -472,19 +562,32 @@ def _vercel_billing_summary(
     try:
         payload = billing_runner(live=live)
     except Exception as exc:
-        return empty_vercel_billing_result(live=live), [{"source": "vercel_billing", "error_class": _safe_error_class(type(exc).__name__, "provider_error")}]
+        return empty_vercel_billing_result(live=live), [
+            {
+                "source": "vercel_billing",
+                "error_class": _safe_error_class(type(exc).__name__, "provider_error"),
+            }
+        ]
 
     fallback = empty_vercel_billing_result(live=live)
     if not isinstance(payload, dict):
-        return fallback, [{"source": "vercel_billing", "error_class": "invalid_adapter_result"}]
+        return fallback, [
+            {"source": "vercel_billing", "error_class": "invalid_adapter_result"}
+        ]
 
-    raw_window = payload.get("window") if isinstance(payload.get("window"), dict) else {}
+    raw_window = (
+        payload.get("window") if isinstance(payload.get("window"), dict) else {}
+    )
     window = {
         "from": _safe_timestamp(raw_window.get("from"), fallback["window"]["from"]),
         "to": _safe_timestamp(raw_window.get("to"), fallback["window"]["to"]),
     }
     service_breakdown: list[dict[str, Any]] = []
-    raw_services = payload.get("service_breakdown") if isinstance(payload.get("service_breakdown"), list) else []
+    raw_services = (
+        payload.get("service_breakdown")
+        if isinstance(payload.get("service_breakdown"), list)
+        else []
+    )
     for raw_service in raw_services[:100]:
         if not isinstance(raw_service, dict):
             continue
@@ -494,9 +597,13 @@ def _vercel_billing_summary(
         service_breakdown.append(
             {
                 "service_name": _safe_public_label(raw_service.get("service_name")),
-                "charge_category": _safe_public_label(raw_service.get("charge_category")),
+                "charge_category": _safe_public_label(
+                    raw_service.get("charge_category")
+                ),
                 "currency": currency,
-                "charge_count": _safe_non_negative_number(raw_service.get("charge_count")),
+                "charge_count": _safe_non_negative_number(
+                    raw_service.get("charge_count")
+                ),
                 "billed_cost": _safe_cost_number(raw_service.get("billed_cost")),
                 "effective_cost": _safe_cost_number(raw_service.get("effective_cost")),
             }
@@ -523,27 +630,47 @@ def _vercel_billing_summary(
         "focus_version": "1.3",
         "response_format": "jsonl",
         "window": window,
-        "account_scope": _safe_public_label(payload.get("account_scope"), fallback["account_scope"]),
+        "account_scope": _safe_public_label(
+            payload.get("account_scope"), fallback["account_scope"]
+        ),
         "auth_source": _safe_auth_source(payload.get("auth_source")),
         "required_secret_names": list(VERCEL_SECRET_NAMES),
-        "team_scope_configured": bool(payload.get("team_scope_configured")) if isinstance(payload.get("team_scope_configured"), bool) else False,
-        "billing_access_scope": _safe_public_label(payload.get("billing_access_scope"), "pro_or_enterprise_team"),
-        "next_action": _safe_vercel_action(payload.get("next_action"), fallback["next_action"]),
+        "team_scope_configured": bool(payload.get("team_scope_configured"))
+        if isinstance(payload.get("team_scope_configured"), bool)
+        else False,
+        "billing_access_scope": _safe_public_label(
+            payload.get("billing_access_scope"), "pro_or_enterprise_team"
+        ),
+        "next_action": _safe_vercel_action(
+            payload.get("next_action"), fallback["next_action"]
+        ),
         "billing_connected": status == "healthy",
         "read_only": True,
         "execution_enabled": False,
         "write_attempted": False,
         "charge_count": _safe_non_negative_number(payload.get("charge_count")),
-        "billed_cost_by_currency": _safe_currency_map(payload.get("billed_cost_by_currency")),
-        "effective_cost_by_currency": _safe_currency_map(payload.get("effective_cost_by_currency")),
+        "billed_cost_by_currency": _safe_currency_map(
+            payload.get("billed_cost_by_currency")
+        ),
+        "effective_cost_by_currency": _safe_currency_map(
+            payload.get("effective_cost_by_currency")
+        ),
         "service_breakdown": service_breakdown,
     }
     if status == "error":
-        normalized["error_class"] = _safe_error_class(payload.get("error_class"), "provider_error")
-        errors.append({"source": "vercel_billing", "error_class": normalized["error_class"]})
+        normalized["error_class"] = _safe_error_class(
+            payload.get("error_class"), "provider_error"
+        )
+        errors.append(
+            {"source": "vercel_billing", "error_class": normalized["error_class"]}
+        )
     elif live and status == "not_configured":
-        normalized["error_class"] = _safe_error_class(payload.get("error_class"), "credentials_not_configured")
-        errors.append({"source": "vercel_billing", "error_class": normalized["error_class"]})
+        normalized["error_class"] = _safe_error_class(
+            payload.get("error_class"), "credentials_not_configured"
+        )
+        errors.append(
+            {"source": "vercel_billing", "error_class": normalized["error_class"]}
+        )
     return normalized, errors
 
 
@@ -556,29 +683,48 @@ def _github_actions_summary(
     try:
         payload = usage_runner(live=live)
     except Exception as exc:
-        return empty_github_actions_result(live=live), [{"source": "github_actions_usage", "error_class": _safe_error_class(type(exc).__name__, "provider_error")}]
+        return empty_github_actions_result(live=live), [
+            {
+                "source": "github_actions_usage",
+                "error_class": _safe_error_class(type(exc).__name__, "provider_error"),
+            }
+        ]
 
     fallback = empty_github_actions_result(live=live)
     if not isinstance(payload, dict):
-        return fallback, [{"source": "github_actions_usage", "error_class": "invalid_adapter_result"}]
+        return fallback, [
+            {"source": "github_actions_usage", "error_class": "invalid_adapter_result"}
+        ]
 
-    raw_window = payload.get("window") if isinstance(payload.get("window"), dict) else {}
+    raw_window = (
+        payload.get("window") if isinstance(payload.get("window"), dict) else {}
+    )
     window: dict[str, Any] = {
         "year": _safe_optional_non_negative_number(raw_window.get("year")),
         "month": _safe_optional_non_negative_number(raw_window.get("month")),
         "from": _safe_timestamp(raw_window.get("from")),
         "to": _safe_timestamp(raw_window.get("to")),
     }
-    raw_allowance = payload.get("free_allowance") if isinstance(payload.get("free_allowance"), dict) else None
+    raw_allowance = (
+        payload.get("free_allowance")
+        if isinstance(payload.get("free_allowance"), dict)
+        else None
+    )
     allowance = None
     if raw_allowance is not None:
         allowance = {
             "minutes": _safe_optional_non_negative_number(raw_allowance.get("minutes")),
-            "artifact_storage_gb": _safe_optional_non_negative_number(raw_allowance.get("artifact_storage_gb")),
-            "cache_storage_gb": _safe_optional_non_negative_number(raw_allowance.get("cache_storage_gb")),
+            "artifact_storage_gb": _safe_optional_non_negative_number(
+                raw_allowance.get("artifact_storage_gb")
+            ),
+            "cache_storage_gb": _safe_optional_non_negative_number(
+                raw_allowance.get("cache_storage_gb")
+            ),
         }
     raw_owner_type = str(payload.get("owner_type") or "user").strip().lower()
-    owner_type = raw_owner_type if raw_owner_type in {"user", "organization"} else "user"
+    owner_type = (
+        raw_owner_type if raw_owner_type in {"user", "organization"} else "user"
+    )
     raw_plan = str(payload.get("plan") or "").strip()
     plan = raw_plan if raw_plan in SAFE_GITHUB_ACTIONS_PLANS else None
     status = _safe_status(
@@ -604,29 +750,62 @@ def _github_actions_summary(
         "api_version": "2026-03-10",
         "window": window,
         "owner_type": owner_type,
-        "owner_configured": bool(payload.get("owner_configured")) if isinstance(payload.get("owner_configured"), bool) else False,
+        "owner_configured": bool(payload.get("owner_configured"))
+        if isinstance(payload.get("owner_configured"), bool)
+        else False,
         "plan": plan,
         "free_allowance": allowance,
         "required_secret_names": list(GITHUB_SECRET_NAMES),
-        "required_config_names": [name for name in payload.get("required_config_names", []) if name in {"GITHUB_BILLING_OWNER", "GITHUB_BILLING_OWNER_TYPE", "GITHUB_ACTIONS_PLAN"}] if isinstance(payload.get("required_config_names"), list) else [],
+        "required_config_names": [
+            name
+            for name in payload.get("required_config_names", [])
+            if name
+            in {
+                "GITHUB_BILLING_OWNER",
+                "GITHUB_BILLING_OWNER_TYPE",
+                "GITHUB_ACTIONS_PLAN",
+            }
+        ]
+        if isinstance(payload.get("required_config_names"), list)
+        else [],
         "auth_source": _safe_auth_source(payload.get("auth_source")),
-        "next_action": _safe_github_actions_action(payload.get("next_action"), fallback["next_action"]),
+        "next_action": _safe_github_actions_action(
+            payload.get("next_action"), fallback["next_action"]
+        ),
         "read_only": True,
         "execution_enabled": False,
         "write_attempted": False,
-        "usage_items_count": _safe_optional_non_negative_number(payload.get("usage_items_count")),
+        "usage_items_count": _safe_optional_non_negative_number(
+            payload.get("usage_items_count")
+        ),
         "actions_rows": _safe_optional_non_negative_number(payload.get("actions_rows")),
-        "actions_minutes": _safe_optional_non_negative_number(payload.get("actions_minutes")),
-        "actions_artifact_storage_gb_hours": _safe_optional_non_negative_number(payload.get("actions_artifact_storage_gb_hours")),
-        "actions_cache_storage_gb_hours": _safe_optional_non_negative_number(payload.get("actions_cache_storage_gb_hours")),
-        "actions_other_quantity": _safe_optional_non_negative_number(payload.get("actions_other_quantity")),
+        "actions_minutes": _safe_optional_non_negative_number(
+            payload.get("actions_minutes")
+        ),
+        "actions_artifact_storage_gb_hours": _safe_optional_non_negative_number(
+            payload.get("actions_artifact_storage_gb_hours")
+        ),
+        "actions_cache_storage_gb_hours": _safe_optional_non_negative_number(
+            payload.get("actions_cache_storage_gb_hours")
+        ),
+        "actions_other_quantity": _safe_optional_non_negative_number(
+            payload.get("actions_other_quantity")
+        ),
     }
     if status == "error":
-        normalized["error_class"] = _safe_error_class(payload.get("error_class"), "provider_error")
-        errors.append({"source": "github_actions_usage", "error_class": normalized["error_class"]})
+        normalized["error_class"] = _safe_error_class(
+            payload.get("error_class"), "provider_error"
+        )
+        errors.append(
+            {"source": "github_actions_usage", "error_class": normalized["error_class"]}
+        )
     elif live and status == "not_configured":
-        normalized["error_class"] = _safe_error_class(payload.get("error_class"), "credentials_not_configured")
-        errors.append({"source": "github_actions_usage", "error_class": normalized["error_class"]})
+        normalized["error_class"] = _safe_error_class(
+            payload.get("error_class"), "credentials_not_configured"
+        )
+        errors.append(
+            {"source": "github_actions_usage", "error_class": normalized["error_class"]}
+        )
     return normalized, errors
 
 
@@ -644,8 +823,12 @@ def build_snapshot(
     accounts, account_errors = _account_records(account_root)
     costs = _costs_section()
     r2_usage, r2_errors = _r2_summary(live, r2_metrics_runner)
-    vercel_billing, vercel_billing_errors = _vercel_billing_summary(live, vercel_billing_runner)
-    github_actions, github_actions_errors = _github_actions_summary(live, github_actions_runner)
+    vercel_billing, vercel_billing_errors = _vercel_billing_summary(
+        live, vercel_billing_runner
+    )
+    github_actions, github_actions_errors = _github_actions_summary(
+        live, github_actions_runner
+    )
     free_quota, free_quota_errors = build_free_quota_projection(
         live=live,
         inventory=inventory,
@@ -664,7 +847,14 @@ def build_snapshot(
 
     resource_count = int(inventory["summary"]["resources"])
     healthy_count = int(inventory["summary"]["healthy"])
-    all_errors = inventory_errors + account_errors + r2_errors + vercel_billing_errors + github_actions_errors + free_quota_errors
+    all_errors = (
+        inventory_errors
+        + account_errors
+        + r2_errors
+        + vercel_billing_errors
+        + github_actions_errors
+        + free_quota_errors
+    )
     r2_connected = r2_usage["status"] == "healthy"
     vercel_billing_connected = vercel_billing["status"] == "healthy"
     github_actions_connected = github_actions["status"] == "healthy"
@@ -688,7 +878,15 @@ def build_snapshot(
         "inventory": {**inventory, "providers": providers},
         "costs": costs,
         "usage": {
-            "status": "verified_read_only_signal" if live and (healthy_count or r2_connected or vercel_billing_connected or github_actions_connected) else "inventory_not_connected",
+            "status": "verified_read_only_signal"
+            if live
+            and (
+                healthy_count
+                or r2_connected
+                or vercel_billing_connected
+                or github_actions_connected
+            )
+            else "inventory_not_connected",
             "resource_count": resource_count,
             "healthy_provider_count": healthy_count,
             "billing_api_connected": vercel_billing_connected,
@@ -711,7 +909,9 @@ def build_snapshot(
             "providers": int(inventory["summary"]["providers"]),
             "healthy_providers": healthy_count,
             "resource_count": resource_count,
-            "known_monthly_currencies": sorted(costs.get("planned_monthly_equivalent", {})),
+            "known_monthly_currencies": sorted(
+                costs.get("planned_monthly_equivalent", {})
+            ),
             "r2_status": r2_usage["status"],
             "r2_object_count": int(r2_usage["object_count"]),
             "r2_payload_gib": float(r2_usage["payload_gib"]),
@@ -720,13 +920,27 @@ def build_snapshot(
             "vercel_billed_cost_by_currency": vercel_billing["billed_cost_by_currency"],
             "github_actions_status": github_actions["status"],
             "github_actions_minutes": github_actions["actions_minutes"],
-            "attention_count": len(all_errors) + int(inventory["summary"]["not_configured"]) + int(inventory["summary"]["errors"]),
+            "attention_count": len(all_errors)
+            + int(inventory["summary"]["not_configured"])
+            + int(inventory["summary"]["errors"]),
         },
         "lineage": [
-            {"source": "adapters/paas_inventory.py", "mode": "live" if live else "offline"},
-            {"source": "adapters/cloudflare_r2_usage.py", "mode": "live" if live else "offline_no_credentials"},
-            {"source": "adapters/vercel_billing.py", "mode": "live" if live else "offline_no_credentials"},
-            {"source": "adapters/github_actions_usage.py", "mode": "live" if live else "offline_no_credentials"},
+            {
+                "source": "adapters/paas_inventory.py",
+                "mode": "live" if live else "offline",
+            },
+            {
+                "source": "adapters/cloudflare_r2_usage.py",
+                "mode": "live" if live else "offline_no_credentials",
+            },
+            {
+                "source": "adapters/vercel_billing.py",
+                "mode": "live" if live else "offline_no_credentials",
+            },
+            {
+                "source": "adapters/github_actions_usage.py",
+                "mode": "live" if live else "offline_no_credentials",
+            },
             {"source": "accounts/cloud", "mode": "nonsecret_metadata"},
         ],
         "errors": all_errors,
@@ -736,8 +950,14 @@ def build_snapshot(
 def main(argv: list[str] | None = None) -> int:
     configure_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--json", action="store_true", help="print the structured snapshot")
-    parser.add_argument("--live", action="store_true", help="perform bounded provider read-only inventory")
+    parser.add_argument(
+        "--json", action="store_true", help="print the structured snapshot"
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="perform bounded provider read-only inventory",
+    )
     args = parser.parse_args(argv)
     print(json.dumps(build_snapshot(live=args.live), ensure_ascii=False, indent=2))
     return 0

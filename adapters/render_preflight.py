@@ -136,7 +136,11 @@ def _extract_resource(payload: Any, resource_key: str) -> dict[str, Any]:
 
 def _render_health_host(service: dict[str, Any]) -> str | None:
     """Return only a provider-owned Render host suitable for health probes."""
-    details = service.get("serviceDetails") if isinstance(service.get("serviceDetails"), dict) else {}
+    details = (
+        service.get("serviceDetails")
+        if isinstance(service.get("serviceDetails"), dict)
+        else {}
+    )
     raw_url = details.get("url") or service.get("url") or ""
     if not isinstance(raw_url, str):
         return None
@@ -177,7 +181,9 @@ def _auto_deploy_value(value: Any) -> str | None:
     return None
 
 
-def _clean_service(service: dict[str, Any], environment_name: str | None = None) -> dict[str, Any]:
+def _clean_service(
+    service: dict[str, Any], environment_name: str | None = None
+) -> dict[str, Any]:
     return {
         "id": service.get("id"),
         "name": service.get("name"),
@@ -200,11 +206,15 @@ def _cli_service_entries(payload: Any) -> list[tuple[dict[str, Any], dict[str, A
         if not isinstance(item, dict) or not isinstance(item.get("service"), dict):
             continue
         environment = item.get("environment")
-        entries.append((item["service"], environment if isinstance(environment, dict) else {}))
+        entries.append(
+            (item["service"], environment if isinstance(environment, dict) else {})
+        )
     return entries
 
 
-def _cli_service_match(payload: Any, service_id: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
+def _cli_service_match(
+    payload: Any, service_id: str
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
     for service, environment in _cli_service_entries(payload):
         if service.get("id") == service_id:
             return service, environment
@@ -219,7 +229,9 @@ def _clean_environment(environment: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _clean_deploy(deploy: dict[str, Any], service_id: str | None = None) -> dict[str, Any]:
+def _clean_deploy(
+    deploy: dict[str, Any], service_id: str | None = None
+) -> dict[str, Any]:
     commit = deploy.get("commit")
     commit_id = commit.get("id") if isinstance(commit, dict) else deploy.get("commitId")
     return {
@@ -255,7 +267,10 @@ def _probe_url(url: str) -> dict[str, Any]:
         opener = urllib.request.build_opener(_NoRedirects())
         with opener.open(request, timeout=HEALTH_PROBE_TIMEOUT_SECONDS) as response:
             status = int(response.status)
-        return {"status": "passed" if 200 <= status < 300 else "blocked", "http_status": status}
+        return {
+            "status": "passed" if 200 <= status < 300 else "blocked",
+            "http_status": status,
+        }
     except Exception as exc:
         status = getattr(exc, "code", None)
         result: dict[str, Any] = {"status": "blocked", "error_class": _safe_error(exc)}
@@ -321,14 +336,20 @@ def discover(
 ) -> dict[str, Any]:
     """Discover Render services and, when selected, recent deploy metadata."""
     payload = _base_payload("live" if live else "offline", "discover")
-    payload.update({"services": [], "deploys": [], "summary": {"services": 0, "deploys": 0}})
+    payload.update(
+        {"services": [], "deploys": [], "summary": {"services": 0, "deploys": 0}}
+    )
 
     if limit < 1 or limit > 100:
         raise ValueError("limit must be between 1 and 100")
     if source not in SOURCES:
         raise ValueError("source must be api or cli")
-    selected_service = _safe_identifier(service_id, "service_id") if service_id else None
-    selected_environment = _safe_identifier(environment_id, "environment_id") if environment_id else None
+    selected_service = (
+        _safe_identifier(service_id, "service_id") if service_id else None
+    )
+    selected_environment = (
+        _safe_identifier(environment_id, "environment_id") if environment_id else None
+    )
     payload["request"] = {
         "service_id": selected_service,
         "environment_id": selected_environment,
@@ -365,7 +386,8 @@ def discover(
             services = [
                 _clean_service(service, environment.get("name"))
                 for service, environment in entries
-                if not selected_environment or service.get("environmentId") == selected_environment
+                if not selected_environment
+                or service.get("environmentId") == selected_environment
             ]
         else:
             params = {"limit": str(limit), "includePreviews": "false"}
@@ -373,11 +395,18 @@ def discover(
                 params["environmentId"] = selected_environment
             response = _get_json(_api_url("/services", params), _headers(token))
             payload["external_calls"] += 1
-            services = [_clean_service(item) for item in _extract_items(response, "service")]
+            services = [
+                _clean_service(item) for item in _extract_items(response, "service")
+            ]
         if selected_service:
             services = [item for item in services if item.get("id") == selected_service]
-        if source == "api" and selected_service and services and (
-            not services[0].get("health_host") or not services[0].get("health_path")
+        if (
+            source == "api"
+            and selected_service
+            and services
+            and (
+                not services[0].get("health_host") or not services[0].get("health_path")
+            )
         ):
             # Render's list response can omit serviceDetails or the configured
             # health path; fetch only the selected resource so the dashboard
@@ -385,13 +414,17 @@ def discover(
             # response fields.
             try:
                 detail_response = _get_json(
-                    _api_url(f"/services/{urllib.parse.quote(selected_service, safe='')}"),
+                    _api_url(
+                        f"/services/{urllib.parse.quote(selected_service, safe='')}"
+                    ),
                     _headers(token),
                 )
                 payload["external_calls"] += 1
                 detail = _extract_resource(detail_response, "service")
                 services[0]["health_host"] = _render_health_host(detail)
-                services[0]["health_path"] = _clean_health_path(detail.get("healthCheckPath"))
+                services[0]["health_path"] = _clean_health_path(
+                    detail.get("healthCheckPath")
+                )
             except Exception:
                 services[0]["health_host"] = None
                 services[0]["health_path"] = None
@@ -400,7 +433,9 @@ def discover(
         if payload["external_calls"] == 0:
             payload["external_calls"] += 1
         payload["status"] = "error"
-        payload["error_class"] = str(exc) if str(exc).startswith("render_cli_") else _safe_error(exc)
+        payload["error_class"] = (
+            str(exc) if str(exc).startswith("render_cli_") else _safe_error(exc)
+        )
         payload["blockers"] = ["render-services-discovery-failed"]
         return payload
 
@@ -417,7 +452,10 @@ def discover(
                 deploy_response = _run_cli(["deploys", "list", selected_service])
             else:
                 deploy_response = _get_json(
-                    _api_url(f"/services/{urllib.parse.quote(selected_service, safe='')}/deploys", {"limit": "20"}),
+                    _api_url(
+                        f"/services/{urllib.parse.quote(selected_service, safe='')}/deploys",
+                        {"limit": "20"},
+                    ),
                     _headers(token),
                 )
             payload["external_calls"] += 1
@@ -428,7 +466,9 @@ def discover(
         except Exception as exc:
             payload["external_calls"] += 1
             payload["status"] = "error"
-            payload["error_class"] = str(exc) if str(exc).startswith("render_cli_") else _safe_error(exc)
+            payload["error_class"] = (
+                str(exc) if str(exc).startswith("render_cli_") else _safe_error(exc)
+            )
             payload["blockers"] = ["render-deploy-discovery-failed"]
 
     payload["summary"] = {
@@ -461,7 +501,10 @@ def _preflight_cli(
         payload["external_calls"] += 1
         match = _cli_service_match(services_response, service)
         if match is None:
-            payload["checks"]["service"] = {"status": "blocked", "error_class": "service_not_found"}
+            payload["checks"]["service"] = {
+                "status": "blocked",
+                "error_class": "service_not_found",
+            }
             blockers.append("render-service-not-found")
             return _finish_preflight(payload, blockers)
         service_data, environment_data = match
@@ -469,7 +512,9 @@ def _preflight_cli(
         service_check = {"status": "passed", "service": cleaned_service}
         if service_data.get("id") != service:
             blockers.append("service-id-mismatch")
-        actual_environment_id = service_data.get("environmentId") or environment_data.get("id")
+        actual_environment_id = service_data.get(
+            "environmentId"
+        ) or environment_data.get("id")
         if actual_environment_id != environment_ref:
             blockers.append("service-environment-mismatch")
         service_type = str(service_data.get("type") or "").lower()
@@ -481,7 +526,10 @@ def _preflight_cli(
             blockers.append("auto-deploy-enabled")
         payload["checks"]["service"] = service_check
 
-        environment_check = {"status": "passed", "environment": _clean_environment(environment_data)}
+        environment_check = {
+            "status": "passed",
+            "environment": _clean_environment(environment_data),
+        }
         if environment_data.get("id") != environment_ref:
             blockers.append("environment-id-mismatch")
         if str(environment_data.get("name") or "").lower() != expected_environment:
@@ -497,9 +545,14 @@ def _preflight_cli(
         deploy_response = _run_cli(["deploys", "list", service])
         payload["external_calls"] += 1
         deploy_items = _extract_items(deploy_response, "deploy")
-        deploy_data = next((item for item in deploy_items if item.get("id") == deploy), None)
+        deploy_data = next(
+            (item for item in deploy_items if item.get("id") == deploy), None
+        )
         if deploy_data is None:
-            payload["checks"]["target_deploy"] = {"status": "blocked", "error_class": "deploy_not_found"}
+            payload["checks"]["target_deploy"] = {
+                "status": "blocked",
+                "error_class": "deploy_not_found",
+            }
             blockers.append("target-deploy-not-found")
         else:
             deploy_check = {"status": "passed", "deploy": _clean_deploy(deploy_data)}
@@ -511,7 +564,10 @@ def _preflight_cli(
             payload["checks"]["target_deploy"] = deploy_check
     except Exception as exc:
         payload["external_calls"] += 1
-        payload["checks"]["target_deploy"] = {"status": "blocked", "error_class": str(exc)}
+        payload["checks"]["target_deploy"] = {
+            "status": "blocked",
+            "error_class": str(exc),
+        }
         blockers.append("render-cli-deploys-read-failed")
 
     health_check = _probe_url(health_url)
@@ -621,7 +677,10 @@ def preflight(
         payload["checks"]["service"] = service_check
     except Exception as exc:
         payload["external_calls"] += 1
-        payload["checks"]["service"] = {"status": "blocked", "error_class": _safe_error(exc)}
+        payload["checks"]["service"] = {
+            "status": "blocked",
+            "error_class": _safe_error(exc),
+        }
         blockers.append("render-service-read-failed")
 
     try:
@@ -640,7 +699,10 @@ def preflight(
         payload["checks"]["environment"] = environment_check
     except Exception as exc:
         payload["external_calls"] += 1
-        payload["checks"]["environment"] = {"status": "blocked", "error_class": _safe_error(exc)}
+        payload["checks"]["environment"] = {
+            "status": "blocked",
+            "error_class": _safe_error(exc),
+        }
         blockers.append("render-environment-read-failed")
 
     try:
@@ -664,7 +726,10 @@ def preflight(
         payload["checks"]["target_deploy"] = deploy_check
     except Exception as exc:
         payload["external_calls"] += 1
-        payload["checks"]["target_deploy"] = {"status": "blocked", "error_class": _safe_error(exc)}
+        payload["checks"]["target_deploy"] = {
+            "status": "blocked",
+            "error_class": _safe_error(exc),
+        }
         blockers.append("render-deploy-read-failed")
 
     health_check = _probe_url(health_url)
@@ -726,14 +791,27 @@ def action_preflight(
         health_host = service.get("health_host")
         if not health_host:
             blocked = _base_payload("live", action)
-            blocked.update({
-                "target_environment": environment,
-                "auth_source": discovery.get("auth_source", "not_checked"),
-                "request": {"service_id": service_id, "environment_id": environment_id, "target_deploy_id": target_deploy_id, "health_path": path, "source": source},
-                "credentials": discovery.get("credentials", {}),
-                "checks": {"service": {"status": "blocked", "error_class": "render-health-host-unavailable"}},
-                "external_calls": int(discovery.get("external_calls") or 0),
-            })
+            blocked.update(
+                {
+                    "target_environment": environment,
+                    "auth_source": discovery.get("auth_source", "not_checked"),
+                    "request": {
+                        "service_id": service_id,
+                        "environment_id": environment_id,
+                        "target_deploy_id": target_deploy_id,
+                        "health_path": path,
+                        "source": source,
+                    },
+                    "credentials": discovery.get("credentials", {}),
+                    "checks": {
+                        "service": {
+                            "status": "blocked",
+                            "error_class": "render-health-host-unavailable",
+                        }
+                    },
+                    "external_calls": int(discovery.get("external_calls") or 0),
+                }
+            )
             return _finish_preflight(blocked, ["render-health-host-unavailable"])
         result = preflight(
             live=True,
@@ -745,7 +823,9 @@ def action_preflight(
             environment=environment,
             _auth=auth,
         )
-        result["external_calls"] = int(result.get("external_calls") or 0) + int(discovery.get("external_calls") or 0)
+        result["external_calls"] = int(result.get("external_calls") or 0) + int(
+            discovery.get("external_calls") or 0
+        )
         return result
 
     payload = _base_payload("live" if live else "offline", action)
@@ -754,7 +834,11 @@ def action_preflight(
         raise ValueError("source must be api or cli")
     service = _safe_identifier(service_id, "service_id")
     environment_ref = _safe_identifier(environment_id, "environment_id")
-    checked_path = _clean_health_path(health_path or "/healthz") if action != "set-auto-deploy" else None
+    checked_path = (
+        _clean_health_path(health_path or "/healthz")
+        if action != "set-auto-deploy"
+        else None
+    )
     payload["target_environment"] = environment
     payload["request"] = {
         "service_id": service,
@@ -805,7 +889,9 @@ def action_preflight(
     payload["credentials"] = discovery.get("credentials", payload["credentials"])
     services = discovery.get("services") or []
     if discovery.get("status") not in {"ready"} or not services:
-        blockers.extend(discovery.get("blockers") or ["render-services-discovery-failed"])
+        blockers.extend(
+            discovery.get("blockers") or ["render-services-discovery-failed"]
+        )
         return _finish_preflight(payload, blockers)
 
     service_data = services[0]
@@ -851,41 +937,87 @@ def action_preflight(
         health_url = f"https://{health_host}{checked_path}"
         health_check = _probe_url(health_url)
         payload["external_calls"] += 1
-        payload["checks"]["health_endpoint"] = {"host": health_host, "path": checked_path, **health_check}
+        payload["checks"]["health_endpoint"] = {
+            "host": health_host,
+            "path": checked_path,
+            **health_check,
+        }
         if health_check.get("status") != "passed":
             blockers.append("health-endpoint-not-healthy")
     return _finish_preflight(payload, blockers)
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Read-only Render discovery and rollback preflight")
+    parser = argparse.ArgumentParser(
+        description="Read-only Render discovery and rollback preflight"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    discover_parser = subparsers.add_parser("discover", help="Discover services and recent deploy metadata")
-    discover_parser.add_argument("--live", action="store_true", help="Call Render read-only endpoints or CLI")
-    discover_parser.add_argument("--source", choices=sorted(SOURCES), default="api", help="Authentication/read source")
+    discover_parser = subparsers.add_parser(
+        "discover", help="Discover services and recent deploy metadata"
+    )
+    discover_parser.add_argument(
+        "--live", action="store_true", help="Call Render read-only endpoints or CLI"
+    )
+    discover_parser.add_argument(
+        "--source",
+        choices=sorted(SOURCES),
+        default="api",
+        help="Authentication/read source",
+    )
     discover_parser.add_argument("--service-id")
     discover_parser.add_argument("--environment-id")
     discover_parser.add_argument("--limit", type=int, default=20)
     discover_parser.add_argument("--json", action="store_true")
 
-    preflight_parser = subparsers.add_parser("preflight", help="Check a staging or production rollback target")
-    preflight_parser.add_argument("--live", action="store_true", help="Call Render read-only endpoints or CLI and health URL")
-    preflight_parser.add_argument("--source", choices=sorted(SOURCES), default="api", help="Authentication/read source")
+    preflight_parser = subparsers.add_parser(
+        "preflight", help="Check a staging or production rollback target"
+    )
+    preflight_parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Call Render read-only endpoints or CLI and health URL",
+    )
+    preflight_parser.add_argument(
+        "--source",
+        choices=sorted(SOURCES),
+        default="api",
+        help="Authentication/read source",
+    )
     preflight_parser.add_argument("--service-id", required=True)
     preflight_parser.add_argument("--environment-id", required=True)
     preflight_parser.add_argument("--target-deploy-id", required=True)
     preflight_parser.add_argument("--health-url", required=True)
-    preflight_parser.add_argument("--environment", default="staging", choices=["staging", "production"])
+    preflight_parser.add_argument(
+        "--environment", default="staging", choices=["staging", "production"]
+    )
     preflight_parser.add_argument("--json", action="store_true")
 
-    action_parser = subparsers.add_parser("action-preflight", help="Check a deploy, restart, rollback, or configuration action")
-    action_parser.add_argument("--live", action="store_true", help="Call Render read-only endpoints or CLI and health URL")
-    action_parser.add_argument("--source", choices=sorted(SOURCES), default="api", help="Authentication/read source")
-    action_parser.add_argument("--action", choices=["deploy", "restart", "rollback", "set-auto-deploy"], required=True)
+    action_parser = subparsers.add_parser(
+        "action-preflight",
+        help="Check a deploy, restart, rollback, or configuration action",
+    )
+    action_parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Call Render read-only endpoints or CLI and health URL",
+    )
+    action_parser.add_argument(
+        "--source",
+        choices=sorted(SOURCES),
+        default="api",
+        help="Authentication/read source",
+    )
+    action_parser.add_argument(
+        "--action",
+        choices=["deploy", "restart", "rollback", "set-auto-deploy"],
+        required=True,
+    )
     action_parser.add_argument("--service-id", required=True)
     action_parser.add_argument("--environment-id", required=True)
-    action_parser.add_argument("--environment", default="staging", choices=["staging", "production"])
+    action_parser.add_argument(
+        "--environment", default="staging", choices=["staging", "production"]
+    )
     action_parser.add_argument("--target-deploy-id")
     action_parser.add_argument("--target-revision")
     action_parser.add_argument("--auto-deploy", choices=["yes", "no"])

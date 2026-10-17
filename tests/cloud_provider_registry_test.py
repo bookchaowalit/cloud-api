@@ -71,13 +71,19 @@ class CloudProviderRegistryTest(unittest.TestCase):
         duplicate = copy.deepcopy(registry)
         duplicate["providers"][1]["id"] = duplicate["providers"][0]["id"]
         self.assertTrue(
-            any("duplicate provider id" in error for error in cloud_providers.validate_registry(duplicate))
+            any(
+                "duplicate provider id" in error
+                for error in cloud_providers.validate_registry(duplicate)
+            )
         )
 
         unsafe_write = copy.deepcopy(registry)
         unsafe_write["providers"][0]["write_policy"] = "direct"
         self.assertTrue(
-            any("write_policy must be proposal_only" in error for error in cloud_providers.validate_registry(unsafe_write))
+            any(
+                "write_policy must be proposal_only" in error
+                for error in cloud_providers.validate_registry(unsafe_write)
+            )
         )
 
     def test_auth_names_are_registry_driven(self):

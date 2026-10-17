@@ -63,9 +63,17 @@ MAX_USAGE_ITEMS = 5_000
 FREE_ALLOWANCES: dict[str, dict[str, int | float]] = {
     "free": {"minutes": 2_000, "artifact_storage_gb": 0.5, "cache_storage_gb": 10},
     "pro": {"minutes": 3_000, "artifact_storage_gb": 1, "cache_storage_gb": 10},
-    "free_for_organizations": {"minutes": 2_000, "artifact_storage_gb": 0.5, "cache_storage_gb": 10},
+    "free_for_organizations": {
+        "minutes": 2_000,
+        "artifact_storage_gb": 0.5,
+        "cache_storage_gb": 10,
+    },
     "team": {"minutes": 3_000, "artifact_storage_gb": 2, "cache_storage_gb": 10},
-    "enterprise_cloud": {"minutes": 50_000, "artifact_storage_gb": 50, "cache_storage_gb": 10},
+    "enterprise_cloud": {
+        "minutes": 50_000,
+        "artifact_storage_gb": 50,
+        "cache_storage_gb": 10,
+    },
 }
 PLAN_ALIASES = {
     "github free": "free",
@@ -247,7 +255,9 @@ def _error_result(
             "owner_configured": owner_configured,
             "plan": plan,
             "auth_source": auth_source,
-            "error_class": error_class if SAFE_ERROR_PATTERN.fullmatch(error_class) else "provider_error",
+            "error_class": error_class
+            if SAFE_ERROR_PATTERN.fullmatch(error_class)
+            else "provider_error",
             "next_action": _next_action(error_class),
         }
     )
@@ -276,7 +286,14 @@ def _classify_row(item: dict[str, Any]) -> tuple[str, float] | None:
     return "other", float(quantity)
 
 
-def _aggregate(payload: Any, *, owner_type: str, owner_configured: bool, plan: str | None, window: dict[str, int | str]) -> dict[str, Any]:
+def _aggregate(
+    payload: Any,
+    *,
+    owner_type: str,
+    owner_configured: bool,
+    plan: str | None,
+    window: dict[str, int | str],
+) -> dict[str, Any]:
     if not isinstance(payload, dict) or not isinstance(payload.get("usageItems"), list):
         raise AdapterError("invalid_github_usage_response")
     items = payload["usageItems"]
@@ -313,7 +330,9 @@ def _aggregate(payload: Any, *, owner_type: str, owner_configured: bool, plan: s
             "usage_items_count": len(items),
             "actions_rows": actions_rows,
             "actions_minutes": _number(totals["minutes"]),
-            "actions_artifact_storage_gb_hours": _number(totals["artifact_storage_gb_hours"]),
+            "actions_artifact_storage_gb_hours": _number(
+                totals["artifact_storage_gb_hours"]
+            ),
             "actions_cache_storage_gb_hours": _number(totals["cache_storage_gb_hours"]),
             "actions_other_quantity": _number(totals["other"]),
         }
@@ -335,17 +354,29 @@ def run_usage(
 
     window = _month_window(now)
     try:
-        raw_owner_type = str(env_getter("GITHUB_BILLING_OWNER_TYPE") or "user").strip().lower()
+        raw_owner_type = (
+            str(env_getter("GITHUB_BILLING_OWNER_TYPE") or "user").strip().lower()
+        )
         if raw_owner_type not in {"user", "organization"}:
             return _error_result("invalid_billing_owner_type", window=window)
         configured_owner = env_getter("GITHUB_BILLING_OWNER")
         owner = _owner(configured_owner)
         if configured_owner and not owner:
-            return _error_result("invalid_billing_owner", window=window, owner_type=raw_owner_type, owner_configured=False)
+            return _error_result(
+                "invalid_billing_owner",
+                window=window,
+                owner_type=raw_owner_type,
+                owner_configured=False,
+            )
         raw_plan = env_getter("GITHUB_ACTIONS_PLAN")
         plan = _normalise_plan(raw_plan)
         if raw_plan and not plan:
-            return _error_result("invalid_actions_plan", window=window, owner_type=raw_owner_type, owner_configured=bool(owner))
+            return _error_result(
+                "invalid_actions_plan",
+                window=window,
+                owner_type=raw_owner_type,
+                owner_configured=bool(owner),
+            )
     except Exception as exc:
         error_class = _safe_error(exc)
         return _error_result(error_class, window=window)
@@ -355,7 +386,11 @@ def run_usage(
             auth = resolve_provider_auth(GITHUB_PROVIDER)
         else:
             token = next(
-                (value.strip() for name in GITHUB_SECRET_NAMES if (value := secret_getter(name)) and value.strip()),
+                (
+                    value.strip()
+                    for name in GITHUB_SECRET_NAMES
+                    if (value := secret_getter(name)) and value.strip()
+                ),
                 None,
             )
             auth = AuthResolution(
@@ -394,7 +429,11 @@ def run_usage(
         result["auth_source"] = auth.auth_source
         result["error_class"] = error_class
         result["next_action"] = _next_action(error_class)
-        result["required_config_names"] = ["GITHUB_BILLING_OWNER"] if raw_owner_type == "organization" and not owner else []
+        result["required_config_names"] = (
+            ["GITHUB_BILLING_OWNER"]
+            if raw_owner_type == "organization" and not owner
+            else []
+        )
         return result
 
     if not auth.credential:
@@ -412,11 +451,17 @@ def run_usage(
     try:
         if raw_owner_type == "user" and owner is None:
             identity = fetcher(f"{API_BASE}/user", headers)
-            owner = _owner(identity.get("login")) if isinstance(identity, dict) else None
+            owner = (
+                _owner(identity.get("login")) if isinstance(identity, dict) else None
+            )
             if not owner:
                 raise AdapterError("invalid_github_identity_response")
             if plan is None and isinstance(identity, dict):
-                identity_plan = identity.get("plan") if isinstance(identity.get("plan"), dict) else {}
+                identity_plan = (
+                    identity.get("plan")
+                    if isinstance(identity.get("plan"), dict)
+                    else {}
+                )
                 plan = _normalise_plan(identity_plan.get("name"))
         elif raw_owner_type == "organization" and owner is None:
             return _error_result(
@@ -431,9 +476,15 @@ def run_usage(
         # succeed when plan visibility is restricted.
         if raw_owner_type == "organization" and owner and plan is None:
             try:
-                metadata = fetcher(f"{API_BASE}/orgs/{urllib.parse.quote(owner, safe='')}", headers)
+                metadata = fetcher(
+                    f"{API_BASE}/orgs/{urllib.parse.quote(owner, safe='')}", headers
+                )
                 if isinstance(metadata, dict):
-                    metadata_plan = metadata.get("plan") if isinstance(metadata.get("plan"), dict) else {}
+                    metadata_plan = (
+                        metadata.get("plan")
+                        if isinstance(metadata.get("plan"), dict)
+                        else {}
+                    )
                     plan = _normalise_plan(metadata_plan.get("name"))
             except Exception:
                 pass
@@ -441,7 +492,9 @@ def run_usage(
         if owner is None:
             raise AdapterError("missing_billing_owner")
         prefix = "organizations" if raw_owner_type == "organization" else "users"
-        params = urllib.parse.urlencode({"year": str(window["year"]), "month": str(window["month"])})
+        params = urllib.parse.urlencode(
+            {"year": str(window["year"]), "month": str(window["month"])}
+        )
         url = f"{API_BASE}/{prefix}/{urllib.parse.quote(owner, safe='')}/settings/billing/usage?{params}"
         payload = fetcher(url, headers)
         result = _aggregate(
@@ -468,8 +521,14 @@ def run_usage(
 def main(argv: list[str] | None = None) -> int:
     configure_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--json", action="store_true", help="print the structured result")
-    parser.add_argument("--live", action="store_true", help="call the GitHub read-only billing usage endpoint")
+    parser.add_argument(
+        "--json", action="store_true", help="print the structured result"
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="call the GitHub read-only billing usage endpoint",
+    )
     args = parser.parse_args(argv)
     print(json.dumps(run_usage(live=args.live), ensure_ascii=False, indent=2))
     return 0

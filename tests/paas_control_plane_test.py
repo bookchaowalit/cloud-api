@@ -70,10 +70,12 @@ class PaaSControlPlaneTest(unittest.TestCase):
                 auth_source="env",
             )
 
-        with patch.object(paas_health, "get_env", side_effect=fake_get_env), patch.object(
-            paas_health, "resolve_provider_auth", side_effect=fake_auth
-        ), patch.object(
-            paas_health, "_get_json", return_value={"items": [], "total_apps": 0}
+        with (
+            patch.object(paas_health, "get_env", side_effect=fake_get_env),
+            patch.object(paas_health, "resolve_provider_auth", side_effect=fake_auth),
+            patch.object(
+                paas_health, "_get_json", return_value={"items": [], "total_apps": 0}
+            ),
         ):
             render = paas_health.check_paas_provider("render", live=True)
             fly = paas_health.check_paas_provider("fly-io", live=True)

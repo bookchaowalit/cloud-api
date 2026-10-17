@@ -34,7 +34,7 @@ SCHEMA_VERSION = "solo-empire.cloudflare-r2-usage.v1"
 API_BASE = "https://api.cloudflare.com/client/v4/accounts"
 USER_AGENT = "solo-empire-cloudflare-r2-readonly/1.0"
 ACCOUNT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
-BYTES_PER_GIB = 1024 ** 3
+BYTES_PER_GIB = 1024**3
 BILLING_BYTES_PER_GB = 1_000_000_000
 PRICING_URL = "https://developers.cloudflare.com/r2/pricing/"
 PRICING_VERIFIED_AT = "2026-09-05"
@@ -138,12 +138,16 @@ def _storage_cost_estimate(
     explicit so this result cannot be mistaken for a provider invoice.
     """
     standard_bytes = int(storage_classes["standard"]["published"]["payload_bytes"])
-    infrequent_access_bytes = int(storage_classes["infrequent_access"]["published"]["payload_bytes"])
+    infrequent_access_bytes = int(
+        storage_classes["infrequent_access"]["published"]["payload_bytes"]
+    )
     standard_gb = standard_bytes / BILLING_BYTES_PER_GB
     infrequent_access_gb = infrequent_access_bytes / BILLING_BYTES_PER_GB
     standard_billable_gb = max(standard_gb - STANDARD_FREE_STORAGE_GB_MONTH, 0.0)
     standard_estimate = standard_billable_gb * STANDARD_STORAGE_RATE_USD_PER_GB_MONTH
-    infrequent_access_estimate = infrequent_access_gb * INFREQUENT_ACCESS_STORAGE_RATE_USD_PER_GB_MONTH
+    infrequent_access_estimate = (
+        infrequent_access_gb * INFREQUENT_ACCESS_STORAGE_RATE_USD_PER_GB_MONTH
+    )
 
     def component(
         payload_gb: float,
@@ -337,8 +341,14 @@ def run_metrics(
 def main(argv: list[str] | None = None) -> int:
     configure_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--json", action="store_true", help="print the structured result")
-    parser.add_argument("--live", action="store_true", help="call the read-only Cloudflare R2 metrics API")
+    parser.add_argument(
+        "--json", action="store_true", help="print the structured result"
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="call the read-only Cloudflare R2 metrics API",
+    )
     args = parser.parse_args(argv)
     print(json.dumps(run_metrics(live=args.live), ensure_ascii=False, indent=2))
     return 0

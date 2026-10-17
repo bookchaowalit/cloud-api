@@ -124,7 +124,9 @@ def _resolve_cli_session(
         if token_result is not None and token_result.returncode == 0:
             token = (token_result.stdout or "").strip()
             if token:
-                if len(token) > MAX_CLI_TOKEN_LENGTH or any(char.isspace() for char in token):
+                if len(token) > MAX_CLI_TOKEN_LENGTH or any(
+                    char.isspace() for char in token
+                ):
                     return AuthResolution(
                         status="error",
                         error_class="cli_token_invalid",
@@ -145,7 +147,9 @@ def _resolve_cli_session(
         which=which,
     )
     if check_error:
-        status: AuthStatus = "error" if check_error != "cli_not_installed" else "not_configured"
+        status: AuthStatus = (
+            "error" if check_error != "cli_not_installed" else "not_configured"
+        )
         return AuthResolution(
             status=status,
             error_class=check_error,

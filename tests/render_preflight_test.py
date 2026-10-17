@@ -39,7 +39,12 @@ class ProbeTransport(urllib.request.HTTPHandler, urllib.request.HTTPSHandler):
 
     def __init__(self, initial_url, status, location=None, error=None):
         super().__init__()
-        self.initial_url, self.status, self.location, self.error = initial_url, status, location, error
+        self.initial_url, self.status, self.location, self.error = (
+            initial_url,
+            status,
+            location,
+            error,
+        )
         self.requests = []
         self.bodies = []
 
@@ -52,8 +57,12 @@ class ProbeTransport(urllib.request.HTTPHandler, urllib.request.HTTPSHandler):
             headers["Location"] = self.location
         body = ProbeBody()
         self.bodies.append(body)
-        response = addinfourl(body, headers, request.full_url,
-                              self.status if request.full_url == self.initial_url else 200)
+        response = addinfourl(
+            body,
+            headers,
+            request.full_url,
+            self.status if request.full_url == self.initial_url else 200,
+        )
         response.msg = "Synthetic health response"
         return response
 
@@ -66,29 +75,53 @@ class RenderProbeTest(unittest.TestCase):
         original_global = urllib.request._opener
         # Cover old urlopen and the per-probe opener without installing a global opener.
         opener = real_builder(transport)
-        with patch.object(render_preflight.urllib.request, "urlopen", side_effect=opener.open), patch.object(
-            render_preflight.urllib.request, "build_opener", side_effect=lambda *handlers: real_builder(transport, *handlers)
-        ), patch.object(render_preflight.urllib.request, "install_opener") as install:
-            result = operation() if operation else render_preflight._probe_url(transport.initial_url)
+        with (
+            patch.object(
+                render_preflight.urllib.request, "urlopen", side_effect=opener.open
+            ),
+            patch.object(
+                render_preflight.urllib.request,
+                "build_opener",
+                side_effect=lambda *handlers: real_builder(transport, *handlers),
+            ),
+            patch.object(render_preflight.urllib.request, "install_opener") as install,
+        ):
+            result = (
+                operation()
+                if operation
+                else render_preflight._probe_url(transport.initial_url)
+            )
         install.assert_not_called()
         self.assertIs(urllib.request._opener, original_global)
         return result
 
     def assert_single_probe(self, transport):
-        self.assertEqual([request.full_url for request in transport.requests], [transport.initial_url])
+        self.assertEqual(
+            [request.full_url for request in transport.requests],
+            [transport.initial_url],
+        )
         request = transport.requests[0]
         self.assertEqual(request.timeout, 20)
         self.assertEqual(request.get_method(), "GET")
         self.assertIsNone(request.data)
-        self.assertEqual({name.lower() for name, _ in request.header_items()}, {"accept", "user-agent", "host"})
+        self.assertEqual(
+            {name.lower() for name, _ in request.header_items()},
+            {"accept", "user-agent", "host"},
+        )
         self.assertTrue(all(body.read_calls == 0 for body in transport.bodies))
 
     def test_redirects_are_blocked_without_requesting_location(self):
         for scheme in ("http", "https"):
             for status in (301, 302, 303, 307, 308):
-                for location in ("https://other.example/ready", "/ready", "http://127.0.0.1:1/admin"):
+                for location in (
+                    "https://other.example/ready",
+                    "/ready",
+                    "http://127.0.0.1:1/admin",
+                ):
                     with self.subTest(scheme=scheme, status=status, location=location):
-                        transport = ProbeTransport(f"{scheme}://fixture.onrender.com/health", status, location)
+                        transport = ProbeTransport(
+                            f"{scheme}://fixture.onrender.com/health", status, location
+                        )
                         result = self.probe(transport)
                         self.assert_single_probe(transport)
                         self.assertEqual(result.get("http_status"), status)
@@ -100,57 +133,133 @@ class RenderProbeTest(unittest.TestCase):
         for scheme in ("http", "https"):
             for status in (200, 204, 299, 400, 503):
                 with self.subTest(scheme=scheme, status=status):
-                    transport = ProbeTransport(f"{scheme}://fixture.onrender.com/health", status)
-                    with patch.object(render_preflight, "resolve_provider_auth") as resolve:
+                    transport = ProbeTransport(
+                        f"{scheme}://fixture.onrender.com/health", status
+                    )
+                    with patch.object(
+                        render_preflight, "resolve_provider_auth"
+                    ) as resolve:
                         result = self.probe(transport)
-                    self.assertEqual(result["status"], "passed" if status < 300 else "blocked")
+                    self.assertEqual(
+                        result["status"], "passed" if status < 300 else "blocked"
+                    )
                     self.assertEqual(result["http_status"], status)
                     self.assert_single_probe(transport)
                     resolve.assert_not_called()
 
     def test_probe_errors_are_sanitized(self):
-        for error, expected in ((TimeoutError("synthetic-error-marker"), "provider_timeout"),
-                                (urllib.error.URLError("synthetic-error-marker"), "provider_unreachable")):
+        for error, expected in (
+            (TimeoutError("synthetic-error-marker"), "provider_timeout"),
+            (urllib.error.URLError("synthetic-error-marker"), "provider_unreachable"),
+        ):
             with self.subTest(error=type(error).__name__):
-                transport = ProbeTransport("https://fixture.onrender.com/health", 200, error=error)
+                transport = ProbeTransport(
+                    "https://fixture.onrender.com/health", 200, error=error
+                )
                 result = self.probe(transport)
                 self.assertEqual(result, {"status": "blocked", "error_class": expected})
                 self.assert_single_probe(transport)
                 self.assertNotIn("synthetic-error-marker", json.dumps(result))
 
     def test_all_preflight_callers_block_redirected_health(self):
-        service = {"id": "srv-fixture", "type": "web_service", "environmentId": "env-staging", "autoDeploy": "no"}
+        service = {
+            "id": "srv-fixture",
+            "type": "web_service",
+            "environmentId": "env-staging",
+            "autoDeploy": "no",
+        }
         environment = {"id": "env-staging", "name": "staging"}
-        deploy = {"id": "dep-fixture", "serviceId": "srv-fixture", "status": "deactivated"}
+        deploy = {
+            "id": "dep-fixture",
+            "serviceId": "srv-fixture",
+            "status": "deactivated",
+        }
         health_url = "https://fixture.onrender.com/health"
         for source in ("api", "cli", "action"):
             with self.subTest(source=source):
                 transport = ProbeTransport(health_url, 302, "http://127.0.0.1:1/admin")
-                arguments = dict(live=True, service_id=service["id"], environment_id=environment["id"],
-                                 target_deploy_id=deploy["id"], health_url=health_url)
+                arguments = dict(
+                    live=True,
+                    service_id=service["id"],
+                    environment_id=environment["id"],
+                    target_deploy_id=deploy["id"],
+                    health_url=health_url,
+                )
                 if source == "action":
-                    discovery = {"status": "ready", "external_calls": 2, "credentials": {"status": "cli_session", "missing": []},
-                                 "services": [{"id": service["id"], "type": "web_service", "environment_id": environment["id"],
-                                               "environment_name": "staging", "auto_deploy": "no", "health_host": "fixture.onrender.com"}],
-                                 "deploys": [{"id": "dep-live", "service_id": service["id"], "status": "live"}]}
-                    with patch.object(render_preflight, "discover", return_value=discovery):
-                        result = self.probe(transport, lambda: render_preflight.action_preflight(
-                            live=True, source="cli", action="restart", service_id=service["id"],
-                            environment_id=environment["id"], health_path="/health"))
+                    discovery = {
+                        "status": "ready",
+                        "external_calls": 2,
+                        "credentials": {"status": "cli_session", "missing": []},
+                        "services": [
+                            {
+                                "id": service["id"],
+                                "type": "web_service",
+                                "environment_id": environment["id"],
+                                "environment_name": "staging",
+                                "auto_deploy": "no",
+                                "health_host": "fixture.onrender.com",
+                            }
+                        ],
+                        "deploys": [
+                            {
+                                "id": "dep-live",
+                                "service_id": service["id"],
+                                "status": "live",
+                            }
+                        ],
+                    }
+                    with patch.object(
+                        render_preflight, "discover", return_value=discovery
+                    ):
+                        result = self.probe(
+                            transport,
+                            lambda: render_preflight.action_preflight(
+                                live=True,
+                                source="cli",
+                                action="restart",
+                                service_id=service["id"],
+                                environment_id=environment["id"],
+                                health_path="/health",
+                            ),
+                        )
                 elif source == "cli":
-                    with patch.object(render_preflight, "_run_cli", side_effect=[
-                        [{"service": service, "environment": environment}], [deploy]
-                    ]):
-                        result = self.probe(transport, lambda: render_preflight.preflight(source="cli", **arguments))
+                    with patch.object(
+                        render_preflight,
+                        "_run_cli",
+                        side_effect=[
+                            [{"service": service, "environment": environment}],
+                            [deploy],
+                        ],
+                    ):
+                        result = self.probe(
+                            transport,
+                            lambda: render_preflight.preflight(
+                                source="cli", **arguments
+                            ),
+                        )
                 else:
                     auth = RenderPreflightTest._configured_auth()
-                    with patch.object(render_preflight, "resolve_provider_auth", return_value=auth), patch.object(
-                        render_preflight, "_get_json", side_effect=[service, environment, deploy]
+                    with (
+                        patch.object(
+                            render_preflight, "resolve_provider_auth", return_value=auth
+                        ),
+                        patch.object(
+                            render_preflight,
+                            "_get_json",
+                            side_effect=[service, environment, deploy],
+                        ),
                     ):
-                        result = self.probe(transport, lambda: render_preflight.preflight(source="api", **arguments))
+                        result = self.probe(
+                            transport,
+                            lambda: render_preflight.preflight(
+                                source="api", **arguments
+                            ),
+                        )
                 self.assertFalse(result["preflight_passed"])
                 self.assertIn("health-endpoint-not-healthy", result["blockers"])
-                self.assertEqual(result["checks"]["health_endpoint"]["http_status"], 302)
+                self.assertEqual(
+                    result["checks"]["health_endpoint"]["http_status"], 302
+                )
                 self.assertFalse(result["execution_allowed"])
                 self.assertFalse(result["write_attempted"])
                 self.assert_single_probe(transport)
@@ -159,26 +268,38 @@ class RenderProbeTest(unittest.TestCase):
 class RenderPreflightTest(unittest.TestCase):
     def test_health_host_only_accepts_provider_owned_render_url(self):
         self.assertEqual(
-            render_preflight._render_health_host({"serviceDetails": {"url": "https://api.onrender.com/"}}),
+            render_preflight._render_health_host(
+                {"serviceDetails": {"url": "https://api.onrender.com/"}}
+            ),
             "api.onrender.com",
         )
         self.assertIsNone(
-            render_preflight._render_health_host({"serviceDetails": {"url": "https://user:pass@evil.example/"}})
+            render_preflight._render_health_host(
+                {"serviceDetails": {"url": "https://user:pass@evil.example/"}}
+            )
         )
         self.assertIsNone(
-            render_preflight._render_health_host({"serviceDetails": {"url": "https://api.onrender.com/path"}})
+            render_preflight._render_health_host(
+                {"serviceDetails": {"url": "https://api.onrender.com/path"}}
+            )
         )
 
     def test_clean_health_path_is_bounded_and_provider_supplied(self):
         self.assertEqual(render_preflight._clean_health_path(" /healthz "), "/healthz")
-        self.assertEqual(render_preflight._clean_service({"healthCheckPath": "/readyz"})["health_path"], "/readyz")
+        self.assertEqual(
+            render_preflight._clean_service({"healthCheckPath": "/readyz"})[
+                "health_path"
+            ],
+            "/readyz",
+        )
         self.assertIsNone(render_preflight._clean_health_path("/health?token=x"))
         self.assertIsNone(render_preflight._clean_health_path("//evil.example"))
 
     def test_offline_discovery_never_calls_render(self):
-        with patch.object(render_preflight, "resolve_provider_auth") as resolve_auth, patch.object(
-            render_preflight, "_get_json"
-        ) as get_json:
+        with (
+            patch.object(render_preflight, "resolve_provider_auth") as resolve_auth,
+            patch.object(render_preflight, "_get_json") as get_json,
+        ):
             payload = render_preflight.discover(live=False)
 
         self.assertEqual(payload["status"], "not_checked")
@@ -203,7 +324,9 @@ class RenderPreflightTest(unittest.TestCase):
                             "autoDeploy": "no",
                             "branch": "main",
                             "healthCheckPath": "/healthz",
-                            "serviceDetails": {"url": "https://staging-api.onrender.com/"},
+                            "serviceDetails": {
+                                "url": "https://staging-api.onrender.com/"
+                            },
                             "secretPayload": "should-not-appear",
                         }
                     }
@@ -223,17 +346,26 @@ class RenderPreflightTest(unittest.TestCase):
                 ]
             },
         ]
-        with patch.object(render_preflight, "resolve_provider_auth", return_value=self._configured_auth()), patch.object(
-            render_preflight, "_get_json", side_effect=responses
+        with (
+            patch.object(
+                render_preflight,
+                "resolve_provider_auth",
+                return_value=self._configured_auth(),
+            ),
+            patch.object(render_preflight, "_get_json", side_effect=responses),
         ):
-            payload = render_preflight.discover(live=True, service_id="srv-staging", environment_id="env-staging")
+            payload = render_preflight.discover(
+                live=True, service_id="srv-staging", environment_id="env-staging"
+            )
 
         self.assertEqual(payload["status"], "ready")
         self.assertEqual(payload["auth_source"], "secret_manager")
         self.assertEqual(payload["external_calls"], 2)
         self.assertEqual(payload["summary"], {"services": 1, "deploys": 1})
         self.assertEqual(payload["services"][0]["id"], "srv-staging")
-        self.assertEqual(payload["services"][0]["health_host"], "staging-api.onrender.com")
+        self.assertEqual(
+            payload["services"][0]["health_host"], "staging-api.onrender.com"
+        )
         self.assertEqual(payload["services"][0]["health_path"], "/healthz")
         self.assertEqual(payload["deploys"][0]["service_id"], "srv-staging")
         self.assertEqual(payload["deploys"][0]["status"], "deactivated")
@@ -272,7 +404,9 @@ class RenderPreflightTest(unittest.TestCase):
             ],
         ]
         with patch.object(render_preflight, "_run_cli", side_effect=responses):
-            payload = render_preflight.discover(live=True, source="cli", service_id="srv-cli")
+            payload = render_preflight.discover(
+                live=True, source="cli", service_id="srv-cli"
+            )
 
         self.assertEqual(payload["status"], "ready")
         self.assertEqual(payload["auth_source"], "cli_session")
@@ -285,17 +419,52 @@ class RenderPreflightTest(unittest.TestCase):
 
     def test_api_discovery_fetches_only_selected_service_detail_for_health_origin(self):
         responses = [
-            {"items": [{"service": {"id": "srv-api", "name": "api-service", "type": "web_service", "environmentId": "env-production"}}]},
-            {"service": {"id": "srv-api", "serviceDetails": {"url": "https://api-service.onrender.com"}, "healthCheckPath": "/healthz", "environmentId": "env-production"}},
-            {"items": [{"deploy": {"id": "dep-api", "serviceId": "srv-api", "status": "live"}}]},
+            {
+                "items": [
+                    {
+                        "service": {
+                            "id": "srv-api",
+                            "name": "api-service",
+                            "type": "web_service",
+                            "environmentId": "env-production",
+                        }
+                    }
+                ]
+            },
+            {
+                "service": {
+                    "id": "srv-api",
+                    "serviceDetails": {"url": "https://api-service.onrender.com"},
+                    "healthCheckPath": "/healthz",
+                    "environmentId": "env-production",
+                }
+            },
+            {
+                "items": [
+                    {
+                        "deploy": {
+                            "id": "dep-api",
+                            "serviceId": "srv-api",
+                            "status": "live",
+                        }
+                    }
+                ]
+            },
         ]
-        with patch.object(render_preflight, "resolve_provider_auth", return_value=self._configured_auth()), patch.object(
-            render_preflight, "_get_json", side_effect=responses
+        with (
+            patch.object(
+                render_preflight,
+                "resolve_provider_auth",
+                return_value=self._configured_auth(),
+            ),
+            patch.object(render_preflight, "_get_json", side_effect=responses),
         ):
             payload = render_preflight.discover(live=True, service_id="srv-api")
 
         self.assertEqual(payload["external_calls"], 3)
-        self.assertEqual(payload["services"][0]["health_host"], "api-service.onrender.com")
+        self.assertEqual(
+            payload["services"][0]["health_host"], "api-service.onrender.com"
+        )
         self.assertEqual(payload["services"][0]["health_path"], "/healthz")
         self.assertEqual(payload["deploys"][0]["service_id"], "srv-api")
         self.assertNotIn("test-render-token", json.dumps(payload))
@@ -324,8 +493,13 @@ class RenderPreflightTest(unittest.TestCase):
                 }
             ],
         ]
-        with patch.object(render_preflight, "_run_cli", side_effect=responses), patch.object(
-            render_preflight, "_probe_url", return_value={"status": "passed", "http_status": 200}
+        with (
+            patch.object(render_preflight, "_run_cli", side_effect=responses),
+            patch.object(
+                render_preflight,
+                "_probe_url",
+                return_value={"status": "passed", "http_status": 200},
+            ),
         ):
             payload = render_preflight.preflight(
                 live=True,
@@ -369,9 +543,19 @@ class RenderPreflightTest(unittest.TestCase):
         def fake_get_json(url, headers=None):
             return responses[url]
 
-        with patch.object(render_preflight, "resolve_provider_auth", return_value=self._configured_auth()), patch.object(
-            render_preflight, "_get_json", side_effect=fake_get_json
-        ), patch.object(render_preflight, "_probe_url", return_value={"status": "passed", "http_status": 200}):
+        with (
+            patch.object(
+                render_preflight,
+                "resolve_provider_auth",
+                return_value=self._configured_auth(),
+            ),
+            patch.object(render_preflight, "_get_json", side_effect=fake_get_json),
+            patch.object(
+                render_preflight,
+                "_probe_url",
+                return_value={"status": "passed", "http_status": 200},
+            ),
+        ):
             payload = render_preflight.preflight(
                 live=True,
                 service_id="srv-staging",
@@ -393,20 +577,29 @@ class RenderPreflightTest(unittest.TestCase):
             "status": "ready",
             "external_calls": 2,
             "credentials": {"status": "cli_session", "missing": []},
-            "services": [{
-                "id": "srv-production",
-                "type": "web_service",
-                "environment_id": "env-production",
-                "environment_name": "Production",
-                "auto_deploy": "no",
-                "health_host": "production.onrender.com",
-                "health_path": "/healthz",
-            }],
-            "deploys": [{"id": "dep-live", "status": "live", "service_id": "srv-production"}],
+            "services": [
+                {
+                    "id": "srv-production",
+                    "type": "web_service",
+                    "environment_id": "env-production",
+                    "environment_name": "Production",
+                    "auto_deploy": "no",
+                    "health_host": "production.onrender.com",
+                    "health_path": "/healthz",
+                }
+            ],
+            "deploys": [
+                {"id": "dep-live", "status": "live", "service_id": "srv-production"}
+            ],
         }
-        with patch.object(render_preflight, "discover", return_value=discovery), patch.object(
-            render_preflight, "_probe_url", return_value={"status": "passed", "http_status": 200}
-        ) as probe:
+        with (
+            patch.object(render_preflight, "discover", return_value=discovery),
+            patch.object(
+                render_preflight,
+                "_probe_url",
+                return_value={"status": "passed", "http_status": 200},
+            ) as probe,
+        ):
             payload = render_preflight.action_preflight(
                 live=True,
                 source="cli",
@@ -421,7 +614,9 @@ class RenderPreflightTest(unittest.TestCase):
         self.assertTrue(payload["preflight_passed"])
         self.assertEqual(payload["status"], "preflight_passed")
         self.assertEqual(payload["external_calls"], 3)
-        self.assertEqual(payload["checks"]["current_deploy"]["deploy"]["id"], "dep-live")
+        self.assertEqual(
+            payload["checks"]["current_deploy"]["deploy"]["id"], "dep-live"
+        )
         probe.assert_called_once_with("https://production.onrender.com/healthz")
         self.assertFalse(payload["execution_allowed"])
         self.assertFalse(payload["write_attempted"])
@@ -431,19 +626,22 @@ class RenderPreflightTest(unittest.TestCase):
             "status": "ready",
             "external_calls": 2,
             "credentials": {"status": "cli_session", "missing": []},
-            "services": [{
-                "id": "srv-production",
-                "type": "web_service",
-                "environment_id": "env-production",
-                "environment_name": "Production",
-                "auto_deploy": "yes",
-                "health_host": "production.onrender.com",
-            }],
+            "services": [
+                {
+                    "id": "srv-production",
+                    "type": "web_service",
+                    "environment_id": "env-production",
+                    "environment_name": "Production",
+                    "auto_deploy": "yes",
+                    "health_host": "production.onrender.com",
+                }
+            ],
             "deploys": [],
         }
-        with patch.object(render_preflight, "discover", return_value=discovery), patch.object(
-            render_preflight, "_probe_url"
-        ) as probe:
+        with (
+            patch.object(render_preflight, "discover", return_value=discovery),
+            patch.object(render_preflight, "_probe_url") as probe,
+        ):
             payload = render_preflight.action_preflight(
                 live=True,
                 source="cli",
@@ -509,9 +707,23 @@ class RenderPreflightTest(unittest.TestCase):
             },
         }
 
-        with patch.object(render_preflight, "resolve_provider_auth", return_value=self._configured_auth()), patch.object(
-            render_preflight, "_get_json", side_effect=lambda url, headers=None: responses[url]
-        ), patch.object(render_preflight, "_probe_url", return_value={"status": "passed", "http_status": 200}):
+        with (
+            patch.object(
+                render_preflight,
+                "resolve_provider_auth",
+                return_value=self._configured_auth(),
+            ),
+            patch.object(
+                render_preflight,
+                "_get_json",
+                side_effect=lambda url, headers=None: responses[url],
+            ),
+            patch.object(
+                render_preflight,
+                "_probe_url",
+                return_value={"status": "passed", "http_status": 200},
+            ),
+        ):
             payload = render_preflight.preflight(
                 live=True,
                 service_id="srv-production",
@@ -547,9 +759,23 @@ class RenderPreflightTest(unittest.TestCase):
             },
         }
 
-        with patch.object(render_preflight, "resolve_provider_auth", return_value=self._configured_auth()), patch.object(
-            render_preflight, "_get_json", side_effect=lambda url, headers=None: responses[url]
-        ), patch.object(render_preflight, "_probe_url", return_value={"status": "passed", "http_status": 200}):
+        with (
+            patch.object(
+                render_preflight,
+                "resolve_provider_auth",
+                return_value=self._configured_auth(),
+            ),
+            patch.object(
+                render_preflight,
+                "_get_json",
+                side_effect=lambda url, headers=None: responses[url],
+            ),
+            patch.object(
+                render_preflight,
+                "_probe_url",
+                return_value={"status": "passed", "http_status": 200},
+            ),
+        ):
             payload = render_preflight.preflight(
                 live=True,
                 service_id="srv-production",

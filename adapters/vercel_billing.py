@@ -113,7 +113,11 @@ def _empty_window() -> dict[str, str | None]:
 
 
 def _format_timestamp(value: datetime) -> str:
-    return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return (
+        value.astimezone(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
 
 
 def _parse_timestamp(value: Any) -> datetime:
@@ -192,11 +196,17 @@ def _safe_money(value: Any) -> float:
 def _record(record: Any) -> tuple[str, str, str, float, float]:
     if not isinstance(record, dict):
         raise AdapterError("invalid_focus_record")
-    currency = _safe_currency(_first(record, "BillingCurrency", "billingCurrency", "Currency", "currency"))
-    service = _safe_label(_first(record, "ServiceName", "serviceName", "ServiceCategory"))
+    currency = _safe_currency(
+        _first(record, "BillingCurrency", "billingCurrency", "Currency", "currency")
+    )
+    service = _safe_label(
+        _first(record, "ServiceName", "serviceName", "ServiceCategory")
+    )
     category = _safe_label(_first(record, "ChargeCategory", "chargeCategory"))
     billed = _safe_money(_first(record, "BilledCost", "billedCost", "billed_cost"))
-    effective = _safe_money(_first(record, "EffectiveCost", "effectiveCost", "effective_cost"))
+    effective = _safe_money(
+        _first(record, "EffectiveCost", "effectiveCost", "effective_cost")
+    )
     return service, category, currency, billed, effective
 
 
@@ -231,7 +241,14 @@ def _aggregate(lines: Iterable[Any]) -> dict[str, Any]:
         key = (service, category, currency)
         row = services.setdefault(
             key,
-            {"service_name": service, "charge_category": category, "currency": currency, "charge_count": 0, "billed_cost": 0.0, "effective_cost": 0.0},
+            {
+                "service_name": service,
+                "charge_category": category,
+                "currency": currency,
+                "charge_count": 0,
+                "billed_cost": 0.0,
+                "effective_cost": 0.0,
+            },
         )
         row["charge_count"] = int(row["charge_count"]) + 1
         row["billed_cost"] = float(row["billed_cost"]) + billed_cost
@@ -241,7 +258,14 @@ def _aggregate(lines: Iterable[Any]) -> dict[str, Any]:
         return {key: round(value, 4) for key, value in sorted(values.items())}
 
     service_breakdown = []
-    for row in sorted(services.values(), key=lambda item: (str(item["service_name"]), str(item["charge_category"]), str(item["currency"])))[:100]:
+    for row in sorted(
+        services.values(),
+        key=lambda item: (
+            str(item["service_name"]),
+            str(item["charge_category"]),
+            str(item["currency"]),
+        ),
+    )[:100]:
         service_breakdown.append(
             {
                 "service_name": row["service_name"],
@@ -290,7 +314,9 @@ def _base(*, live: bool, window: dict[str, str | None] | None = None) -> dict[st
     }
 
 
-def empty_result(*, live: bool = False, window: dict[str, str | None] | None = None) -> dict[str, Any]:
+def empty_result(
+    *, live: bool = False, window: dict[str, str | None] | None = None
+) -> dict[str, Any]:
     """Return a stable sanitized result for offline or unavailable states."""
     return _base(live=live, window=window)
 
@@ -325,7 +351,9 @@ def _live_error(
     result = _base(live=True, window=window)
     result["status"] = "error"
     result["credential_state"] = "error"
-    result["error_class"] = error_class if SAFE_ERROR_PATTERN.fullmatch(error_class) else "provider_error"
+    result["error_class"] = (
+        error_class if SAFE_ERROR_PATTERN.fullmatch(error_class) else "provider_error"
+    )
     result["auth_source"] = auth_source
     result["team_scope_configured"] = team_scope_configured
     result["next_action"] = _next_action_for_error(result["error_class"])
@@ -339,7 +367,9 @@ def _not_configured_result(
     auth_source: str | None = None,
 ) -> dict[str, Any]:
     result = _base(live=True, window=window)
-    result["error_class"] = error_class if SAFE_ERROR_PATTERN.fullmatch(error_class) else "provider_error"
+    result["error_class"] = (
+        error_class if SAFE_ERROR_PATTERN.fullmatch(error_class) else "provider_error"
+    )
     result["auth_source"] = auth_source
     result["next_action"] = _next_action_for_error(result["error_class"])
     return result
@@ -402,7 +432,11 @@ def run_billing(
             auth = resolve_provider_auth(VERCEL_PROVIDER)
         else:
             token = next(
-                (value.strip() for name in VERCEL_SECRET_NAMES if (value := secret_getter(name)) and value.strip()),
+                (
+                    value.strip()
+                    for name in VERCEL_SECRET_NAMES
+                    if (value := secret_getter(name)) and value.strip()
+                ),
                 None,
             )
             auth = AuthResolution(
@@ -413,7 +447,9 @@ def run_billing(
                 missing=() if token else tuple(VERCEL_SECRET_NAMES),
             )
     except Exception as exc:
-        return _live_error(_safe_error(exc), window=window, auth_source="secret_manager")
+        return _live_error(
+            _safe_error(exc), window=window, auth_source="secret_manager"
+        )
 
     if auth.status == "error":
         return _live_error(
@@ -443,9 +479,13 @@ def run_billing(
     if team_slug:
         params["slug"] = team_slug
     url = f"{API_URL}?{urllib.parse.urlencode(params)}"
-    account_scope = "configured_team" if team_id or team_slug else "personal_or_token_scope"
+    account_scope = (
+        "configured_team" if team_id or team_slug else "personal_or_token_scope"
+    )
     try:
-        aggregate = _aggregate(fetcher(url, {"Authorization": f"Bearer {str(token).strip()}"}))
+        aggregate = _aggregate(
+            fetcher(url, {"Authorization": f"Bearer {str(token).strip()}"})
+        )
     except Exception as exc:
         return _live_error(
             _safe_error(exc),
@@ -465,12 +505,22 @@ def run_billing(
 def main(argv: list[str] | None = None) -> int:
     configure_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--json", action="store_true", help="print the structured result")
-    parser.add_argument("--live", action="store_true", help="call the Vercel read-only billing endpoint")
+    parser.add_argument(
+        "--json", action="store_true", help="print the structured result"
+    )
+    parser.add_argument(
+        "--live", action="store_true", help="call the Vercel read-only billing endpoint"
+    )
     parser.add_argument("--from", dest="from_date", help="UTC date or ISO timestamp")
     parser.add_argument("--to", dest="to_date", help="UTC date or ISO timestamp")
     args = parser.parse_args(argv)
-    print(json.dumps(run_billing(live=args.live, from_date=args.from_date, to_date=args.to_date), ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            run_billing(live=args.live, from_date=args.from_date, to_date=args.to_date),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
 
 

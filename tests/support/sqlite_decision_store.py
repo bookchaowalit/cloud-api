@@ -22,12 +22,39 @@ os.environ.pop("EMPIRE_DECISIONS_API", None)
 os.environ["EMPIRE_CLIENT_CONFIG"] = "/nonexistent/test/client.env"
 
 LEGACY_DDL = Path(__file__).resolve().parent / "legacy_decision_tables.sql"
-FIELDS = ("title", "domain", "decision", "rationale", "evidence_refs", "confidence", "expected_outcome",
-          "actual_outcome", "next_action", "status", "approval_required", "approval_status", "action_type",
-          "action_status", "privacy_class", "source_type", "source_ref", "review_date", "decided_at",
-          "dedupe_key", "execution_lock_key")
-DEFAULTS = {"domain": "general", "status": "proposed", "approval_required": True, "approval_status": "pending",
-            "action_type": "none", "action_status": "none", "privacy_class": "private", "evidence_refs": []}
+FIELDS = (
+    "title",
+    "domain",
+    "decision",
+    "rationale",
+    "evidence_refs",
+    "confidence",
+    "expected_outcome",
+    "actual_outcome",
+    "next_action",
+    "status",
+    "approval_required",
+    "approval_status",
+    "action_type",
+    "action_status",
+    "privacy_class",
+    "source_type",
+    "source_ref",
+    "review_date",
+    "decided_at",
+    "dedupe_key",
+    "execution_lock_key",
+)
+DEFAULTS = {
+    "domain": "general",
+    "status": "proposed",
+    "approval_required": True,
+    "approval_status": "pending",
+    "action_type": "none",
+    "action_status": "none",
+    "privacy_class": "private",
+    "evidence_refs": [],
+}
 REVIEW_FIELDS = ("task_id", "status", "reviewer", "outcome", "notes", "reviewed_at")
 
 
@@ -55,7 +82,9 @@ class SqliteDecisionStore:
         for table in ("decision_records", "decision_reviews"):
             columns = {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}
             if "version" not in columns:
-                self.conn.execute(f"ALTER TABLE {table} ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+                self.conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN version INTEGER NOT NULL DEFAULT 1"
+                )
         self.conn.commit()
 
     def _record(self, row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -85,31 +114,69 @@ class SqliteDecisionStore:
             return int(bool(value))
         return value
 
-    def _insert_event(self, decision_id: int, event: dict[str, Any], before: dict | None, after: dict | None) -> None:
+    def _insert_event(
+        self,
+        decision_id: int,
+        event: dict[str, Any],
+        before: dict | None,
+        after: dict | None,
+    ) -> None:
         def pair(name: str) -> tuple[Any, Any]:
             return (before or {}).get(name), (after or {}).get(name)
 
-        (fs, ts), (fa, ta), (fx, tx) = pair("status"), pair("approval_status"), pair("action_status")
+        (fs, ts), (fa, ta), (fx, tx) = (
+            pair("status"),
+            pair("approval_status"),
+            pair("action_status"),
+        )
         self.conn.execute(
             "INSERT INTO decision_events (decision_id, event_type, actor, from_status, to_status, from_approval_status,"
             " to_approval_status, from_action_status, to_action_status, reason, metadata, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (decision_id, event["event_type"], event.get("actor", "system"), fs, ts, fa, ta, fx, tx,
-             event.get("reason"), json.dumps(event.get("metadata") or {}, separators=(",", ":")), _now()))
+            (
+                decision_id,
+                event["event_type"],
+                event.get("actor", "system"),
+                fs,
+                ts,
+                fa,
+                ta,
+                fx,
+                tx,
+                event.get("reason"),
+                json.dumps(event.get("metadata") or {}, separators=(",", ":")),
+                _now(),
+            ),
+        )
 
-    def _changed(self, before: dict[str, Any], fields: dict[str, Any]) -> dict[str, Any]:
+    def _changed(
+        self, before: dict[str, Any], fields: dict[str, Any]
+    ) -> dict[str, Any]:
         return {k: v for k, v in fields.items() if before.get(k) != v}
 
     # --- records -------------------------------------------------------------------------
 
-    def list(self, *, status: list[str] | str | None = None, limit: int = 100, offset: int = 0,
-             **filters: Any) -> list[dict[str, Any]]:
+    def list(
+        self,
+        *,
+        status: list[str] | str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        **filters: Any,
+    ) -> list[dict[str, Any]]:
         where, params = ["1=1"], []
         statuses = [status] if isinstance(status, str) else list(status or [])
         if statuses:
             where.append(f"status IN ({','.join('?' * len(statuses))})")
             params += statuses
-        for name in ("domain", "approval_status", "approval_required", "action_status", "source_type", "source_ref"):
+        for name in (
+            "domain",
+            "approval_status",
+            "approval_required",
+            "action_status",
+            "source_type",
+            "source_ref",
+        ):
             if filters.get(name) is not None:
                 where.append(f"{name} = ?")
                 params.append(self._store(name, filters[name]))
@@ -119,51 +186,95 @@ class SqliteDecisionStore:
         if filters.get("updated_since"):
             where.append("updated_at >= ?")
             params.append(filters["updated_since"])
-        rows = self.conn.execute(f"SELECT * FROM decision_records WHERE {' AND '.join(where)}"
-                                 " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", (*params, limit, offset))
+        rows = self.conn.execute(
+            f"SELECT * FROM decision_records WHERE {' AND '.join(where)}"
+            " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        )
         return [self._record(r) for r in rows]
 
     def all(self, **filters: Any) -> list[dict[str, Any]]:
         return self.list(limit=1_000_000, **filters)
 
     def stats(self, group_by: str = "status") -> dict[str, int]:
-        return {r[0]: r[1] for r in self.conn.execute(f"SELECT {group_by}, count(*) FROM decision_records GROUP BY 1")}
+        return {
+            r[0]: r[1]
+            for r in self.conn.execute(
+                f"SELECT {group_by}, count(*) FROM decision_records GROUP BY 1"
+            )
+        }
 
     def get(self, decision_id: int) -> dict[str, Any] | None:
-        return self._record(self.conn.execute("SELECT * FROM decision_records WHERE id = ?",
-                                              (int(decision_id),)).fetchone())
+        return self._record(
+            self.conn.execute(
+                "SELECT * FROM decision_records WHERE id = ?", (int(decision_id),)
+            ).fetchone()
+        )
 
     def by_dedupe(self, key: str) -> dict[str, Any] | None:
-        return self._record(self.conn.execute("SELECT * FROM decision_records WHERE dedupe_key = ?", (key,)).fetchone())
+        return self._record(
+            self.conn.execute(
+                "SELECT * FROM decision_records WHERE dedupe_key = ?", (key,)
+            ).fetchone()
+        )
 
-    def create(self, fields: dict[str, Any], *, event: dict[str, Any] | None = None,
-               idempotency_key: str | None = None) -> dict[str, Any]:
+    def create(
+        self,
+        fields: dict[str, Any],
+        *,
+        event: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
         data = {**DEFAULTS, **{k: v for k, v in fields.items() if k in FIELDS}}
         now = _now()
         try:
             cursor = self.conn.execute(
                 f"INSERT INTO decision_records ({', '.join(data)}, created_at, updated_at)"
-                f" VALUES ({', '.join('?' * len(data))}, ?, ?)", (*[self._store(k, v) for k, v in data.items()], now, now))
+                f" VALUES ({', '.join('?' * len(data))}, ?, ?)",
+                (*[self._store(k, v) for k, v in data.items()], now, now),
+            )
         except sqlite3.IntegrityError as exc:
             raise DecisionStoreError(409, "conflict") from exc
         row = self.get(cursor.lastrowid)
-        self._insert_event(row["id"], event or {"event_type": "created", "actor": "api"}, None, row)
+        self._insert_event(
+            row["id"], event or {"event_type": "created", "actor": "api"}, None, row
+        )
         self.conn.commit()
         return row
 
-    def upsert(self, dedupe_key: str, fields: dict[str, Any], *, event: dict[str, Any] | None = None
-               ) -> tuple[str, dict[str, Any]]:
+    def upsert(
+        self,
+        dedupe_key: str,
+        fields: dict[str, Any],
+        *,
+        event: dict[str, Any] | None = None,
+    ) -> tuple[str, dict[str, Any]]:
         before = self.by_dedupe(dedupe_key)
         if before is None:
             created_event = {**(event or {"actor": "api"}), "event_type": "created"}
-            return "created", self.create({**fields, "dedupe_key": dedupe_key}, event=created_event)
-        data = self._changed(before, {k: v for k, v in fields.items() if k in FIELDS and k != "dedupe_key"})
+            return "created", self.create(
+                {**fields, "dedupe_key": dedupe_key}, event=created_event
+            )
+        data = self._changed(
+            before,
+            {k: v for k, v in fields.items() if k in FIELDS and k != "dedupe_key"},
+        )
         if not data:
             return "unchanged", before
-        return "refreshed", self.update(before["id"], data, event=event or {"event_type": "refreshed", "actor": "api"})
+        return "refreshed", self.update(
+            before["id"],
+            data,
+            event=event or {"event_type": "refreshed", "actor": "api"},
+        )
 
-    def update(self, decision_id: int, fields: dict[str, Any], *, event: dict[str, Any] | None = None,
-               expected_version: int | None = None) -> dict[str, Any]:
+    def update(
+        self,
+        decision_id: int,
+        fields: dict[str, Any],
+        *,
+        event: dict[str, Any] | None = None,
+        expected_version: int | None = None,
+    ) -> dict[str, Any]:
         before = self.get(decision_id)
         if before is None:
             raise DecisionStoreError(404, "not_found")
@@ -176,7 +287,13 @@ class SqliteDecisionStore:
                 changed = self.conn.execute(
                     f"UPDATE decision_records SET {assignments}, version = version + 1, updated_at = ?"
                     " WHERE id = ? AND version = ?",
-                    (*[self._store(k, v) for k, v in data.items()], _now(), int(decision_id), before["version"]))
+                    (
+                        *[self._store(k, v) for k, v in data.items()],
+                        _now(),
+                        int(decision_id),
+                        before["version"],
+                    ),
+                )
             except sqlite3.IntegrityError as exc:
                 self.conn.rollback()
                 raise DecisionStoreError(409, "conflict") from exc
@@ -185,37 +302,71 @@ class SqliteDecisionStore:
                 raise DecisionStoreError(409, "version_conflict")
         after = self.get(decision_id)
         if data or event is not None:
-            self._insert_event(int(decision_id), event or {"event_type": "updated", "actor": "api"}, before, after)
+            self._insert_event(
+                int(decision_id),
+                event or {"event_type": "updated", "actor": "api"},
+                before,
+                after,
+            )
         self.conn.commit()
         return after
 
     def delete(self, decision_id: int) -> None:
-        self.conn.execute("DELETE FROM decision_records WHERE id = ?", (int(decision_id),))
+        self.conn.execute(
+            "DELETE FROM decision_records WHERE id = ?", (int(decision_id),)
+        )
         self.conn.commit()
 
     # --- history -----------------------------------------------------------------------------
 
-    def add_event(self, decision_id: int, event_type: str, *, actor: str = "system", reason: str | None = None,
-                  metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    def add_event(
+        self,
+        decision_id: int,
+        event_type: str,
+        *,
+        actor: str = "system",
+        reason: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         row = self.get(decision_id)
         if row is None:
             raise DecisionStoreError(404, "not_found")
-        self._insert_event(int(decision_id), {"event_type": event_type, "actor": actor, "reason": reason,
-                                              "metadata": metadata or {}}, row, row)
+        self._insert_event(
+            int(decision_id),
+            {
+                "event_type": event_type,
+                "actor": actor,
+                "reason": reason,
+                "metadata": metadata or {},
+            },
+            row,
+            row,
+        )
         self.conn.commit()
         return self.events(decision_id, limit=1)[0]
 
     def events(self, decision_id: int, limit: int = 100) -> list[dict[str, Any]]:
-        rows = self.conn.execute("SELECT * FROM decision_events WHERE decision_id = ? ORDER BY created_at DESC, id DESC"
-                                 " LIMIT ?", (int(decision_id), limit))
+        rows = self.conn.execute(
+            "SELECT * FROM decision_events WHERE decision_id = ? ORDER BY created_at DESC, id DESC"
+            " LIMIT ?",
+            (int(decision_id), limit),
+        )
         return [self._event(r) for r in rows]
 
     def history(self, decision_id: int) -> list[dict[str, Any]]:
-        rows = self.conn.execute("SELECT * FROM decision_events WHERE decision_id = ? ORDER BY id", (int(decision_id),))
+        rows = self.conn.execute(
+            "SELECT * FROM decision_events WHERE decision_id = ? ORDER BY id",
+            (int(decision_id),),
+        )
         return [self._event(r) for r in rows]
 
-    def recent_events(self, *, event_type: str | None = None, since: str | None = None,
-                      limit: int = 100) -> list[dict[str, Any]]:
+    def recent_events(
+        self,
+        *,
+        event_type: str | None = None,
+        since: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
         where, params = ["1=1"], []
         if event_type:
             where.append("event_type = ?")
@@ -223,14 +374,23 @@ class SqliteDecisionStore:
         if since:
             where.append("created_at >= ?")
             params.append(since)
-        rows = self.conn.execute(f"SELECT * FROM decision_events WHERE {' AND '.join(where)}"
-                                 " ORDER BY created_at DESC, id DESC LIMIT ?", (*params, limit))
+        rows = self.conn.execute(
+            f"SELECT * FROM decision_events WHERE {' AND '.join(where)}"
+            " ORDER BY created_at DESC, id DESC LIMIT ?",
+            (*params, limit),
+        )
         return [self._event(r) for r in rows]
 
     # --- reviews -----------------------------------------------------------------------------
 
-    def reviews(self, *, status: str | None = None, decision_id: int | None = None,
-                due_on_or_before: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def reviews(
+        self,
+        *,
+        status: str | None = None,
+        decision_id: int | None = None,
+        due_on_or_before: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
         where, params = ["1=1"], []
         for name, value in (("status", status), ("decision_id", decision_id)):
             if value is not None:
@@ -239,55 +399,86 @@ class SqliteDecisionStore:
         if due_on_or_before:
             where.append("due_date <= ?")
             params.append(due_on_or_before)
-        rows = self.conn.execute(f"SELECT * FROM decision_reviews WHERE {' AND '.join(where)} ORDER BY due_date, id"
-                                 " LIMIT ?", (*params, limit))
+        rows = self.conn.execute(
+            f"SELECT * FROM decision_reviews WHERE {' AND '.join(where)} ORDER BY due_date, id"
+            " LIMIT ?",
+            (*params, limit),
+        )
         return [self._review(r) for r in rows]
 
     def review(self, review_id: int) -> dict[str, Any] | None:
-        return self._review(self.conn.execute("SELECT * FROM decision_reviews WHERE id = ?",
-                                              (int(review_id),)).fetchone())
+        return self._review(
+            self.conn.execute(
+                "SELECT * FROM decision_reviews WHERE id = ?", (int(review_id),)
+            ).fetchone()
+        )
 
-    def put_review(self, decision_id: int, due_date: str, fields: dict[str, Any] | None = None
-                   ) -> tuple[str, dict[str, Any]]:
+    def put_review(
+        self, decision_id: int, due_date: str, fields: dict[str, Any] | None = None
+    ) -> tuple[str, dict[str, Any]]:
         if self.get(decision_id) is None:
             raise DecisionStoreError(404, "not_found")
         data = {k: v for k, v in (fields or {}).items() if k in REVIEW_FIELDS}
-        before = self._review(self.conn.execute("SELECT * FROM decision_reviews WHERE decision_id = ? AND due_date = ?",
-                                                (int(decision_id), due_date)).fetchone())
+        before = self._review(
+            self.conn.execute(
+                "SELECT * FROM decision_reviews WHERE decision_id = ? AND due_date = ?",
+                (int(decision_id), due_date),
+            ).fetchone()
+        )
         now = _now()
         if before is None:
             columns = ["decision_id", "due_date", *data, "created_at", "updated_at"]
-            cursor = self.conn.execute(f"INSERT INTO decision_reviews ({', '.join(columns)})"
-                                       f" VALUES ({', '.join('?' * len(columns))})",
-                                       (int(decision_id), due_date, *data.values(), now, now))
+            cursor = self.conn.execute(
+                f"INSERT INTO decision_reviews ({', '.join(columns)})"
+                f" VALUES ({', '.join('?' * len(columns))})",
+                (int(decision_id), due_date, *data.values(), now, now),
+            )
             self.conn.commit()
-            return "created", self._review(self.conn.execute("SELECT * FROM decision_reviews WHERE id = ?",
-                                                             (cursor.lastrowid,)).fetchone())
+            return "created", self._review(
+                self.conn.execute(
+                    "SELECT * FROM decision_reviews WHERE id = ?", (cursor.lastrowid,)
+                ).fetchone()
+            )
         diff = {k: v for k, v in data.items() if before.get(k) != v}
         if not diff:
             return "unchanged", before
         return "updated", self.update_review(before["id"], diff)
 
-    def update_review(self, review_id: int, fields: dict[str, Any], *, expected_version: int | None = None
-                      ) -> dict[str, Any]:
-        before = self._review(self.conn.execute("SELECT * FROM decision_reviews WHERE id = ?",
-                                                (int(review_id),)).fetchone())
+    def update_review(
+        self,
+        review_id: int,
+        fields: dict[str, Any],
+        *,
+        expected_version: int | None = None,
+    ) -> dict[str, Any]:
+        before = self._review(
+            self.conn.execute(
+                "SELECT * FROM decision_reviews WHERE id = ?", (int(review_id),)
+            ).fetchone()
+        )
         if before is None:
             raise DecisionStoreError(404, "not_found")
         if expected_version is not None and before["version"] != expected_version:
             raise DecisionStoreError(409, "version_conflict")
-        diff = {k: v for k, v in fields.items() if k in REVIEW_FIELDS and before.get(k) != v}
+        diff = {
+            k: v for k, v in fields.items() if k in REVIEW_FIELDS and before.get(k) != v
+        }
         if diff:
             assignments = ", ".join(f"{k} = ?" for k in diff)
             changed = self.conn.execute(
                 f"UPDATE decision_reviews SET {assignments}, version = version + 1, updated_at = ?"
-                " WHERE id = ? AND version = ?", (*diff.values(), _now(), int(review_id), before["version"]))
+                " WHERE id = ? AND version = ?",
+                (*diff.values(), _now(), int(review_id), before["version"]),
+            )
             if changed.rowcount != 1:
                 self.conn.rollback()
                 raise DecisionStoreError(409, "version_conflict")
             self.conn.commit()
-        return self._review(self.conn.execute("SELECT * FROM decision_reviews WHERE id = ?",
-                                              (int(review_id),)).fetchone())
+        return self._review(
+            self.conn.execute(
+                "SELECT * FROM decision_reviews WHERE id = ?", (int(review_id),)
+            ).fetchone()
+        )
 
 
 def sqlite_decision_opener(conn: sqlite3.Connection):
